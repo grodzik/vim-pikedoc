@@ -26,7 +26,13 @@ if exists("g:loaded_pikedoc") || v:version < 700
     finish
 endif
 
-for path in g:pikedoc_pike_sources
+for src in g:pikedoc_pike_sources
+    if type(src) == type({})
+        let path = src['path']
+    else
+        let path = src
+    endif
+
     if !isdirectory(glob(path))
         echo "PikeDoc: source path: " . path . " does not exist."
         finish
@@ -51,10 +57,20 @@ endfunction
 function! s:generate_index() abort
     silent! execute "!mkdir -p " . s:plugindir . "/pikedoc/images"
     for src in g:pikedoc_pike_sources
-        execute "!pike " . s:plugindir . "/tools/doc_extractor.pike --srcdir="
-                    \. glob(src) . " --builddir=" . s:plugindir . "/pikedoc "
-                    \. "--imgsrc=" . glob(src) . "/../refdoc/src_images "
-                    \. "--imgdir=" . s:plugindir . "/pikedoc/images"
+        let cmd = "!" . g:pikedoc_pike_cmd . " "
+                    \. s:plugindir . "/tools/doc_extractor.pike "
+                    \. "--builddir=" .  s:plugindir . "/pikedoc"
+        if type(src) == type({})
+            let cmd = cmd . " --srcdir=" . glob(src["path"])
+            if has_key(src, 'imgsrc')
+                let cmd = cmd . " --imgsrc=" . glob(src['imgsrc'])
+                let cmd = cmd . " --imgdir=" . s:plugindir . "/pikedoc/images"
+            endif
+        else
+            let cmd = cmd . " --srcdir=" . glob(src)
+        endif
+
+        silent! execute cmd
     endfor
 endfunction
 
