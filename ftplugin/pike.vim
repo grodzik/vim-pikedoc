@@ -75,7 +75,7 @@ function! s:on_buffer_destroy() abort
     let s:bufnr = -1
 endfunction
 
-function! s:window() abort
+function! s:focus_or_create() abort
     if s:bufwinnr >= 0
         silent execute s:bufwinnr . "wincmd w"
     else
@@ -137,7 +137,7 @@ function! s:pikedoc_open()
         return 0
     endif
 
-    call s:window()
+    call s:focus_or_create()
     call s:load(ret)
 endfunction
 
