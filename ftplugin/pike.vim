@@ -48,11 +48,12 @@ endfunction
 
 function! s:generate_index() abort
     execute "!mkdir " . s:plugindir . "/pikedoc"
+    execute "!mkdir " . s:plugindir . "/pikedoc/images"
     for src in g:pikedoc_pike_sources
         execute "!pike " . s:plugindir . "/tools/doc_extractor.pike --srcdir="
                     \. glob(src) . " --builddir=" . s:plugindir . "/pikedoc "
                     \. "--imgsrc=" . glob(src) . "/../refdoc/src_images "
-                    \. "--imgdir=" . s:plugindir . "/tools/images"
+                    \. "--imgdir=" . s:plugindir . "/pikedoc/images"
     endfor
 endfunction
 
