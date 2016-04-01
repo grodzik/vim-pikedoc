@@ -716,48 +716,6 @@ void recurse(string srcdir, string builddir, int root_ts, array(string) root)
         root_ts = st->mtime;
     }
 
-    foreach (get_dir(builddir), string fn)
-    {
-        if ((fn != ".cache.xml") && has_suffix(fn, ".xml"))
-        {
-            if (!Stdio.is_file(srcdir + fn[..<4]))
-            {
-                if (verbosity > 0)
-                    werror("The file %O is no more.\n", srcdir + fn[..<4]);
-
-                num_updated_files++;
-                rm(builddir + fn);
-                rm(builddir + fn[..<4] + ".brokenxml");
-                rm(builddir + fn + ".stamp");
-                rm(builddir + ".cache.xml.stamp");
-            }
-            else if (source_timestamp && (source_timestamp < 950000000)
-                && (sizeof(fn/".") == 2))
-            {
-                // BMML.
-                int old_ts = (int)Stdio.read_bytes(builddir + fn + ".stamp");
-                if ((old_ts < bmml_invalidate_before)
-                    || (old_ts >= bmml_invalidate_after))
-                {
-                    // BMML file that may have changed at this time.
-                    if (verbosity > 1)
-                        werror("Forcing reextraction of %s.\n", srcdir + fn[..<4]);
-
-                    rm(builddir + fn + ".stamp");
-                }
-            }
-        }
-        else if (Stdio.is_dir(builddir + fn) && !Stdio.is_dir(srcdir + fn))
-        {
-            // Recurse and clean away old obsolete files.
-            recurse(srcdir + fn + "/", builddir + fn + "/", root_ts, root);
-            rm(builddir + fn + "/.cache.xml.stamp");
-            rm(builddir + fn + "/.cache.xml");
-            // Try deleting the directory.
-            rm(builddir + fn);
-            rm(builddir + ".cache.xml.stamp");
-        }
-    }
 
     if (!file_stat(srcdir))
     {
@@ -811,9 +769,6 @@ void recurse(string srcdir, string builddir, int root_ts, array(string) root)
                     werror("Precompilation of %s to %s failed:\n"
                             "%s",
                             srcdir+fn, srcdir+target, describe_error(err));
-                    rm(srcdir+target);
-                    rm(builddir+target+".xml");
-                    rm(builddir+target+".xml.stamp");
                 }
             }
         }
@@ -859,42 +814,34 @@ void recurse(string srcdir, string builddir, int root_ts, array(string) root)
                 continue;
             }
 
-            Stdio.Stat dstat = file_stat(builddir+fn+".xml")
-                                && file_stat(builddir+fn+".xml.stamp");
-
-            // Build the xml file if it doesn't exist, if it is older than the
-            // source file, or if the root has changed since the previous build.
-            if (!dstat || dstat->mtime <= stat->mtime || dstat->mtime <= root_ts)
+            string res = extract(srcdir+fn, imgdir, builddir, root);
+            if (!res)
             {
-                string res = extract(srcdir+fn, imgdir, builddir, root);
-                if (!res)
-                {
-                    if (!(flags & Tools.AutoDoc.FLAG_KEEP_GOING))
-                        exit(1);
+                if (!(flags & Tools.AutoDoc.FLAG_KEEP_GOING))
+                    exit(1);
 
-                    res = "";
+                res = "";
+            }
+
+            if (sizeof(res) && (res != "\n"))
+            {
+                // Validate the extracted XML.
+                Parser.XML.Tree.SimpleRootNode root_node;
+                mixed err = catch {
+                    root_node = Parser.XML.Tree.simple_parse_input(res);
+                };
+                if (err)
+                {
+                    werror("Extractor generated broken XML for file %s:\n"
+                            "%s",
+                            builddir + fn + ".xml", describe_error(err));
+                    if (flags & Tools.AutoDoc.FLAG_KEEP_GOING)
+                        continue;
+
+                    exit(1);
                 }
 
-                if (sizeof(res) && (res != "\n"))
-                {
-                    // Validate the extracted XML.
-                    Parser.XML.Tree.SimpleRootNode root_node;
-                    mixed err = catch {
-                        root_node = Parser.XML.Tree.simple_parse_input(res);
-                    };
-                    if (err)
-                    {
-                        werror("Extractor generated broken XML for file %s:\n"
-                                "%s",
-                                builddir + fn + ".xml", describe_error(err));
-                        if (flags & Tools.AutoDoc.FLAG_KEEP_GOING)
-                            continue;
-
-                        exit(1);
-                    }
-
-                    root_node->iterate_children(parse_node, builddir);
-                }
+                root_node->iterate_children(parse_node, builddir);
             }
         }
     }
