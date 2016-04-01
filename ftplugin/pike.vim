@@ -41,14 +41,15 @@ endif
 
 let s:plugindir = expand("<sfile>:p:h:h")
 let s:index = {}
+let s:bufwinnr = -1
+let s:bufnr = -1
 
 function! s:get_indexfile() abort
     return s:plugindir . "/pikedoc/index.txt"
 endfunction
 
 function! s:generate_index() abort
-    execute "!mkdir " . s:plugindir . "/pikedoc"
-    execute "!mkdir " . s:plugindir . "/pikedoc/images"
+    silent! execute "!mkdir -p " . s:plugindir . "/pikedoc/images"
     for src in g:pikedoc_pike_sources
         execute "!pike " . s:plugindir . "/tools/doc_extractor.pike --srcdir="
                     \. glob(src) . " --builddir=" . s:plugindir . "/pikedoc "
@@ -69,14 +70,33 @@ function! s:read_index() abort
     endfor
 endfunction
 
-function! s:window() abort
-    silent exe "silent topleft 10 new pikedoc"
-    setlocal bufhidden=wipe nobuflisted noswapfile nowrap modifiable
+function! s:on_buffer_destroy() abort
+    let s:bufwinnr = -1
+    let s:bufnr = -1
 endfunction
 
-function! s:load(file) abort
-    normal ggVGd
-    exe "read " . a:file
+function! s:window() abort
+    if s:bufwinnr >= 0
+        silent execute s:bufwinnr . "wincmd w"
+    else
+        silent execute "topleft 10new pike_doc"
+        setlocal bufhidden=wipe nobuflisted noswapfile nowrap modifiable readonly
+        let s:bufwinnr = bufwinnr('%')
+        let s:bufnr = bufnr('%')
+        au BufDelete,BufWipeout,BufHidden <buffer> call s:on_buffer_destroy()
+        nnoremap <buffer> <silent> q :bd<cr>
+    endif
+endfunction
+
+function! s:load(file)
+    let tmp = tempname()
+    silent! execute "keepalt file " . tmp
+    silent! execute "read " . a:file
+    silent! normal! ggdd
+    silent! w!
+    silent execute "file " . fnamemodify(a:file, ":t:r")
+    set filetype=pikedoc
+    call delete(tmp)
 endfunction
 
 function! s:get_helpfile(name) abort
