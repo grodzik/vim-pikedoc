@@ -47,8 +47,15 @@ endif
 
 let s:plugindir = expand("<sfile>:p:h:h")
 let s:index = {}
-let s:bufwinnr = -1
-let s:bufnr = -1
+
+let s:protobuffer = {
+            \"file" : "",
+            \"name" : "",
+            \"#" : -1,
+            \"win#" : -1
+            \}
+
+let s:buffer = {}
 
 function! s:get_indexfile() abort
     return s:plugindir . "/pikedoc/index.txt"
@@ -87,18 +94,17 @@ function! s:read_index() abort
 endfunction
 
 function! s:on_buffer_destroy() abort
-    let s:bufwinnr = -1
-    let s:bufnr = -1
+    let s:buffer = extend({}, s:protobuffer)
 endfunction
 
 function! s:focus_or_create() abort
-    if s:bufwinnr >= 0
-        silent execute s:bufwinnr . "wincmd w"
+    if s:buffer['win#'] >= 0
+        silent execute s:buffer['win#'] . "wincmd w"
     else
         silent execute "topleft 10new pike_doc"
         setlocal bufhidden=wipe nobuflisted noswapfile nowrap modifiable readonly
-        let s:bufwinnr = bufwinnr('%')
-        let s:bufnr = bufnr('%')
+        let s:buffer['win#'] = bufwinnr('%')
+        let s:buffer['#'] = bufnr('%')
         au BufDelete,BufWipeout,BufHidden <buffer> call s:on_buffer_destroy()
         nnoremap <buffer> <silent> q :bd<cr>
     endif
@@ -110,9 +116,11 @@ function! s:load(file)
     silent! execute "read " . a:file
     silent! normal! ggdd
     silent! w!
-    silent execute "file " . fnamemodify(a:file, ":t:r")
+    let s:buffer['name'] = fnamemodify(a:file, ":t:r")
+    silent execute "file " . s:buffer['name']
     set filetype=pikedoc
     call delete(tmp)
+    let s:buffer['file'] = a:file
 endfunction
 
 function! s:get_helpfile(name) abort
