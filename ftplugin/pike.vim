@@ -45,23 +45,32 @@ if !exists("g:pikedoc_pike_cmd")
     let g:pikedoc_pike_cmd = 'pike'
 endif
 
+function! s:get_function(fun) abort
+  return function(substitute(a:fun,'^s:',
+              \matchstr(expand('<sfile>'), '<SNR>\d\+_'),''))
+endfunction
+
+function! s:add_to(object, what) abort
+    for name in a:what
+        let s:{a:object}_defaults[name] = s:get_function('s:' . a:object . '_' . name)
+    endfor
+endfunction
+
 let s:plugindir = expand("<sfile>:p:h:h")
 let s:index = {}
 
-let s:protobuffer = {
-            \"file" : "",
-            \"name" : "",
-            \"#" : -1,
-            \"win#" : -1
-            \}
+let s:pikedoc_defaults = {}
 
-let s:buffer = copy(s:protobuffer)
+function s:pikedoc(...) abort
+    let buf = {'#': a:0 ? a:1 : bufnr('%')}
+    return extend(buf, s:pikedoc_defaults)
+endfunction
 
-function! s:get_indexfile() abort
+function! s:pikedoc_indexfile() dict abort
     return s:plugindir . "/pikedoc/index.txt"
 endfunction
 
-function! s:generate_index() abort
+function! s:pikedoc_generate_index() dict abort
     silent! execute "!mkdir -p " . s:plugindir . "/pikedoc/images"
     for src in g:pikedoc_pike_sources
         let cmd = "!" . g:pikedoc_pike_cmd . " "
@@ -81,10 +90,10 @@ function! s:generate_index() abort
     endfor
 endfunction
 
-function! s:read_index() abort
-    let l:indexfile = s:get_indexfile()
+function! s:pikedoc_read_index() dict abort
+    let l:indexfile = self.indexfile()
     if filereadable(l:indexfile) == 0
-        call s:generate_index()
+        call self.generate_index()
     endif
     let local_index = readfile(l:indexfile)
     for line in local_index
@@ -93,39 +102,9 @@ function! s:read_index() abort
     endfor
 endfunction
 
-function! s:on_buffer_destroy() abort
-    let s:buffer = extend({}, s:protobuffer)
-endfunction
-
-function! s:focus_or_create() abort
-    if s:buffer['win#'] >= 0
-        silent execute s:buffer['win#'] . "wincmd w"
-    else
-        silent execute "topleft 10new pike_doc"
-        setlocal bufhidden=wipe nobuflisted noswapfile nowrap modifiable readonly
-        let s:buffer['win#'] = bufwinnr('%')
-        let s:buffer['#'] = bufnr('%')
-        au BufDelete,BufWipeout,BufHidden <buffer> call s:on_buffer_destroy()
-        nnoremap <buffer> <silent> q :bd<cr>
-    endif
-endfunction
-
-function! s:load(file)
-    let tmp = tempname()
-    silent! execute "keepalt file " . tmp
-    silent! execute "read " . a:file
-    silent! normal! ggdd
-    silent! w!
-    let s:buffer['name'] = fnamemodify(a:file, ":t:r")
-    silent execute "file " . s:buffer['name']
-    set filetype=pikedoc
-    call delete(tmp)
-    let s:buffer['file'] = a:file
-endfunction
-
-function! s:get_helpfile(name) abort
+function! s:pikedoc_find_doc(name) dict abort
     if len(s:index) == 0
-        call s:read_index()
+        call self.read_index()
     endif
 
     let l:list = split(substitute(a:name, "\[.\]", " ", "g"))
@@ -144,27 +123,56 @@ function! s:get_helpfile(name) abort
             let subpath = join(l:list[0:-2], "/") . "/" . l:key
             let pos = match(l:filelist, subpath)
             if pos >= 0
-                return l:filelist[pos]
+                let self.file = l:filelist[pos]
+                return 1
             endif
         endif
-        return file
+        let self.file = file
+        return 1
     endif
 
-    return -1
+    return 0
 endfunction
 
-function! s:pikedoc_open()
-    let helpword = expand("<cWORD>")
-    let ret = s:get_helpfile(helpword)
+" function! s:pikedoc_fill_with(content) dict abort
+"     let tmp = tempname()
+"     silent! execute "keepalt file " . tmp
+"     silent! execute "0append(" . a:file . ")"
+"     silent! w!
+"     silent execute "file " . self['name']
+"     set filetype=pikedoc
+"     call delete(tmp)
+" endfunction
 
-    if ret == -1
+function! s:pikedoc_open() dict abort
+    cd /tmp
+    let content = readfile(self.file)
+    let name = self.get_name()
+    call writefile(content, name)
+    silent! execute "pedit " . name
+endfunction
+
+function! s:pikedoc_get_name() dict abort
+    return fnamemodify(self.file, ":t:r")
+endfunction
+
+call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
+            \'find_doc', 'get_name', 'open'])
+
+function! s:Show(word)
+    let pikedoc = s:pikedoc()
+
+    if !pikedoc.find_doc(a:word)
         return 0
     endif
 
-    call s:focus_or_create()
-    call s:load(ret)
+    call pikedoc.open()
+
+    wincmd P
+    nnoremap <buffer> <silent> q :bd<cr>
+
 endfunction
 
-nnoremap <silent> <Plug>PikeDoc :<C-U>call <SID>pikedoc_open()<CR>
+nnoremap <silent> <Plug>PikeDoc :<C-U>call <SID>Show(expand("<cWORD>"))<CR>
 
 nmap <C-i> <Plug>PikeDoc
