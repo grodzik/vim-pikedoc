@@ -134,22 +134,13 @@ function! s:pikedoc_find_doc(name) dict abort
     return 0
 endfunction
 
-" function! s:pikedoc_fill_with(content) dict abort
-"     let tmp = tempname()
-"     silent! execute "keepalt file " . tmp
-"     silent! execute "0append(" . a:file . ")"
-"     silent! w!
-"     silent execute "file " . self['name']
-"     set filetype=pikedoc
-"     call delete(tmp)
-" endfunction
-
 function! s:pikedoc_open() dict abort
     cd /tmp
     let content = readfile(self.file)
     let name = self.get_name()
     call writefile(content, name)
     silent! execute "pedit " . name
+    call delete(name)
 endfunction
 
 function! s:pikedoc_get_name() dict abort
