@@ -55,7 +55,7 @@ let s:protobuffer = {
             \"win#" : -1
             \}
 
-let s:buffer = {}
+let s:buffer = copy(s:protobuffer)
 
 function! s:get_indexfile() abort
     return s:plugindir . "/pikedoc/index.txt"
