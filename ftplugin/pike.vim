@@ -45,6 +45,10 @@ if !exists("g:pikedoc_pike_cmd")
     let g:pikedoc_pike_cmd = 'pike'
 endif
 
+if !exists("g:pikedoc_confirm_remove")
+    let g:pikedoc_confirm_remove = 1
+endif
+
 function! s:get_function(fun) abort
   return function(substitute(a:fun,'^s:',
               \matchstr(expand('<sfile>'), '<SNR>\d\+_'),''))
@@ -71,6 +75,17 @@ endfunction
 
 function! s:pikedoc_indexfile() dict abort
     return s:plugindir . "/pikedoc/index.txt"
+endfunction
+
+function! s:pikedoc_clear_docs() dict abort
+    if isdirectory(s:plugindir . "/pikedoc")
+        if g:pikedoc_confirm_remove
+            silent! execute "!echo 'You need to type yes to make it happen' "
+                        \. "&& rm -rI " . s:plugindir . "/pikedoc"
+        else
+            silent! execute "!rm -r " . s:plugindir . "/pikedoc"
+        endif
+    endif
 endfunction
 
 function! s:pikedoc_generate_index() dict abort
@@ -193,11 +208,12 @@ endfunction
 
 call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
             \'find_doc', 'get_name', 'open', 'parent', 'fill_with',
-            \'has_doc', 'methods', 'modules', 'classes', 'get_this_path'])
+            \'has_doc', 'methods', 'modules', 'classes', 'get_this_path',
+            \'clear_docs'])
 
 function! s:Show(...) abort
     if a:0 && a:1 is 0
-        return 0
+        return
     endif
 
     let word = a:0 ? a:1 : expand("<cWORD>")
@@ -206,7 +222,7 @@ function! s:Show(...) abort
 
     if !pikedoc.has_doc()
         if !pikedoc.find_doc(word)
-            return 0
+            return
         endif
     endif
 
@@ -221,6 +237,18 @@ function! s:Show(...) abort
     execute "nnoremap <buffer> <silent> c :<C-U>call <SID>Show('".pikedoc.classes()."')<cr>"
 endfunction
 
-nnoremap <silent> <Plug>PikeDoc :<C-U>call <SID>Show(expand("<cWORD>"))<CR>
+function! s:Generate() abort
+    let pikedoc = s:pikedoc()
+    call pikedoc.clear_docs()
+    call pikedoc.generate_index()
+    silent execute ":redraw!"
+endfunction
 
-nmap <C-i> <Plug>PikeDoc
+execute "command! -buffer -nargs=? PikeDoc :call s:Show(<f-args>)"
+execute "command! -buffer -nargs=0 PikeDocGenerate :call s:Generate()"
+
+if exists('g:pikedoc_define_mappings') && g:pikedoc_define_mappings == 1
+    let master_key = exists('g:pikedoc_master_key') ? g:pikedoc_master_key : "g"
+    execute "nnoremap <Leader>".master_key."p :PikeDoc<cr>"
+    execute "nnoremap <Leader>".master_key."g :PikeDocGenerate<cr>"
+endif
