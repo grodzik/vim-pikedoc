@@ -17,6 +17,10 @@ If doc_extractor is failing because of images, most likly you need to
 
 Note that this is prealfa stage, so more sources may not work well yet.
 
+
+You can also set `g:pikedoc_pike_cmd` if you want to use pike other than
+the one available in your `$PATH`. Keep in mind that this needs to be ``Pike >= 8.0``
+
 # Usage
 
 With cursor over a pike method/class/module press `<C-i>` (will be customizable later)
