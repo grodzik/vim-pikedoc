@@ -62,8 +62,11 @@ let s:index = {}
 let s:pikedoc_defaults = {}
 
 function s:pikedoc(...) abort
-    let buf = {'#': a:0 ? a:1 : bufnr('%')}
-    return extend(buf, s:pikedoc_defaults)
+    let l:pikedoc = {}
+    if a:0 && filereadable(a:1)
+        let l:pikedoc = {'file': a:1}
+    endif
+    return extend(l:pikedoc, s:pikedoc_defaults)
 endfunction
 
 function! s:pikedoc_indexfile() dict abort
@@ -134,34 +137,88 @@ function! s:pikedoc_find_doc(name) dict abort
     return 0
 endfunction
 
-function! s:pikedoc_open() dict abort
+function! s:pikedoc_has_doc() dict abort
+    if has_key(self, "file") && filereadable(self.file)
+        return 1
+    endif
+    return 0
+endfunction
+
+function! s:pikedoc_fill_with(content) dict abort
     cd /tmp
-    let content = readfile(self.file)
     let name = self.get_name()
-    call writefile(content, name)
-    silent! execute "pedit " . name
+    call writefile(a:content, name)
+    silent execute "pedit " . name
     call delete(name)
+    cd -
+endfunction
+
+function! s:pikedoc_open() dict abort
+    let content = readfile(self.file)
+    call self.fill_with(content)
 endfunction
 
 function! s:pikedoc_get_name() dict abort
     return fnamemodify(self.file, ":t:r")
 endfunction
 
-call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
-            \'find_doc', 'get_name', 'open'])
-
-function! s:Show(word)
-    let pikedoc = s:pikedoc()
-
-    if !pikedoc.find_doc(a:word)
+function! s:pikedoc_get_this_path(what) dict abort
+    let path = fnamemodify(self.file, ":h")
+    if fnamemodify(path, ":t:r") != "__this__"
+        let path = path."/__this__/"
+    endif
+    let path = path."/".a:what
+    if filereadable(path)
+        return path
+    else
         return 0
+    endif
+endfunction
+
+function! s:pikedoc_parent() dict abort
+    return self.get_this_path("description")
+endfunction
+
+function! s:pikedoc_methods() dict abort
+    return self.get_this_path("methods")
+endfunction
+
+function! s:pikedoc_modules() dict abort
+    return self.get_this_path("modules")
+endfunction
+
+function! s:pikedoc_classes() dict abort
+    return self.get_this_path("classes")
+endfunction
+
+call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
+            \'find_doc', 'get_name', 'open', 'parent', 'fill_with',
+            \'has_doc', 'methods', 'modules', 'classes', 'get_this_path'])
+
+function! s:Show(...) abort
+    if a:0 && a:1 is 0
+        return 0
+    endif
+
+    let word = a:0 ? a:1 : expand("<cWORD>")
+    
+    let pikedoc = s:pikedoc(word)
+
+    if !pikedoc.has_doc()
+        if !pikedoc.find_doc(word)
+            return 0
+        endif
     endif
 
     call pikedoc.open()
 
     wincmd P
+    setlocal nobuflisted nowrap bufhidden=wipe
     nnoremap <buffer> <silent> q :bd<cr>
-
+    execute "nnoremap <buffer> <silent> p :<C-U>call <SID>Show('".pikedoc.parent()."')<cr>"
+    execute "nnoremap <buffer> <silent> m :<C-U>call <SID>Show('".pikedoc.methods()."')<cr>"
+    execute "nnoremap <buffer> <silent> M :<C-U>call <SID>Show('".pikedoc.modules()."')<cr>"
+    execute "nnoremap <buffer> <silent> c :<C-U>call <SID>Show('".pikedoc.classes()."')<cr>"
 endfunction
 
 nnoremap <silent> <Plug>PikeDoc :<C-U>call <SID>Show(expand("<cWORD>"))<CR>

@@ -23,6 +23,18 @@ With cursor over a pike method/class/module press `<C-i>` (will be customizable 
 A window above will popup, you need to close it manually currently, as plugin will
 spawn new window with each call.
 
+## Mappings
+
+When inside PikeDoc window, following mappings are available:
+```
+p - display description of parent module/class/namespace
+m - display methods available in parent object
+M - display modules available in parent object
+c - display classes available in parent object
+```
+
+`<C-i>` mapping works inside those lists as well
+
 ## Note
 
 This is early stage of development, most planned things don't work yet, so stay tuned ;)
