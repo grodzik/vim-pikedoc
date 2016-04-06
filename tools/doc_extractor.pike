@@ -33,29 +33,104 @@ inherit Tools.Standalone.extract_autodoc;
 constant description = "Extracts docs from Pike or C code and stores them in"
 " more friendly ay for PikeDoc vim plugin.";
 
-string line(void|int width)
+protected int width = 80;
+protected int columns = 1;
+
+string line(void|int w)
 {
-    return sprintf("\n%'-'" + (width || 80) + "s\n", "");
+    return sprintf("\n%'-'" + (w || min(80, width)) + "s\n", "");
+}
+
+string get_table(array(string) entries, void|int sep, void|int cols)
+{
+    if (!entries || !sizeof(entries))
+        return "";
+
+    cols = cols || columns;
+
+    array(array(string)) column_strings = entries/(float)(sizeof(entries)/(float)cols);
+    array(int) column_widths = allocate(sizeof(column_strings));
+    int num_entries_in_column = sizeof(column_strings[0]);
+    int max_col_width =
+        (width - ((!undefinedp(sep)) ? 4 + 3 * (cols-1) : (cols-1)))/cols;
+    foreach (column_strings; int i; array(string) col_entries)
+    {
+        if (sizeof(col_entries) == 1)
+        {
+            column_widths[i] = strlen(col_entries[0]);
+        }
+        else
+        {
+            column_widths[i] = Array.reduce(lambda(string|int arg1, string arg2)
+                    {
+                    int s1 = stringp(arg1) ? strlen(arg1) : arg1;
+                    int s2 = strlen(arg2);
+                    return (s1 > s2) ? s1 : s2;
+                    }, col_entries);
+
+            if (column_widths[i] > max_col_width)
+                return (cols-1) ? get_table(entries, sep, cols-1) : "";
+        }
+
+        if (sizeof(col_entries) < num_entries_in_column)
+            column_strings[i] += ({ "" });
+    }
+
+    string ret = "";
+    if (Array.sum(column_widths) <= width)
+    {
+        array(string) col_patterns = allocate(sizeof(column_widths));
+        foreach (column_widths; int i; int w)
+        {
+            col_patterns[i] = "%-' '" + w + "s";
+        }
+        string pattern;
+        if (!undefinedp(sep))
+        {
+            pattern = sprintf("%c %s %c\n", sep,
+                    col_patterns * sprintf(" %c ", sep), sep);
+        }
+        else
+            pattern = col_patterns*" " + "\n";
+
+        for (int i = 0; i < sizeof(column_strings[0]); i++)
+            ret += sprintf(pattern, @column(column_strings, i));
+    }
+    else if(cols > 1)
+        ret = get_table(entries, sep, cols-1);
+    else
+        ret = entries*"\n";
+
+    return ret;
 }
 
 class Base
 {
     protected string name;
     protected mapping(string:string) attributes;
-    protected Parser.XML.Tree.SimpleNode self;
+    protected array(Parser.XML.Tree.SimpleNode) nodes = ({ });
 
     string get_string() { return "Base"; }
 
-    void create(Parser.XML.Tree.SimpleNode node, void|bool no_parse)
+    void create(void|Parser.XML.Tree.SimpleNode node) { };
+
+    protected void prepare(mapping(string:string) attrs)
     {
-        self = node;
-        attributes = self->get_attributes() || ([ ]);
-        name = attributes->name;
-        if (!no_parse)
-            parse();
+        if (!name)
+        {
+            attributes = attrs;
+            name = attrs->name;
+        }
     }
 
-    void parse();
+    void process_node(Parser.XML.Tree.SimpleNode node);
+
+    void parse(Parser.XML.Tree.SimpleNode node)
+    {
+        nodes += ({ node });
+        prepare(node->get_attributes() || ([ ]));
+        process_node(node);
+    }
 
     string get_name() { return name; }
 
@@ -67,6 +142,11 @@ class Base
     string _sprintf()
     {
         return get_string();
+    }
+
+    void debug()
+    {
+        werror("Node: %O : attrs: %O, nodes: %O\n", name, attributes,nodes);
     }
 }
 
@@ -96,9 +176,9 @@ class Types
         }
     }
 
-    void parse()
+    protected void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        Parser.XML.Tree.SimpleNode child = self->get_first_element();
+        Parser.XML.Tree.SimpleNode child = node->get_first_element();
         if (child->get_any_name() == "or")
         {
             foreach (child->get_elements(), Parser.XML.Tree.SimpleNode c)
@@ -122,9 +202,9 @@ class Value
     inherit Base;
     private string value;
 
-    void parse()
+    protected void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        value = (string)self->value_of_node();
+        value = (string)node->value_of_node();
     }
 
     string get_string()
@@ -140,12 +220,18 @@ class Argument
     private Types types;
     private Value value;
 
-    void parse()
+    protected void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        if (Parser.XML.Tree.SimpleNode v = self->get_first_element("value"))
-            value = Value(v);
+        if (Parser.XML.Tree.SimpleNode v = node->get_first_element("value"))
+        {
+            value = Value();
+            value->parse(v);
+        }
         else
-            types = Types(self->get_first_element("type"));
+        {
+            types = Types();
+            types->parse(node->get_first_element("type"));
+        }
     }
 
     string get_string()
@@ -164,18 +250,21 @@ class Method
     private array(Argument) args = ({ });
     private Types returns;
 
-    void parse()
+    protected void process_node(Parser.XML.Tree.SimpleNode node)
     {
         Parser.XML.Tree.SimpleNode argument_nodes =
-            self->get_first_element("arguments");
+            node->get_first_element("arguments");
 
         foreach (argument_nodes->get_elements("argument"),
             Parser.XML.Tree.SimpleNode child)
         {
-            args += ({ Argument(child) });
+            Argument arg = Argument();
+            arg->parse(child);
+            args += ({ arg });
         }
 
-        returns = Types(self->get_first_element("returntype"));
+        returns = Types();
+        returns->parse(node->get_first_element("returntype"));
     }
 
     string get_string()
@@ -190,9 +279,10 @@ class Variable
 
     private Types types;
 
-    void parse()
+    void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        types = Types(self);
+        types = Types();
+        types->parse(node);
     }
 
     string get_string()
@@ -205,7 +295,7 @@ class Constant
 {
     inherit Base;
 
-    void parse() {}
+    void process_node(Parser.XML.Tree.SimpleNode node) {}
 
     string get_string()
     {
@@ -241,7 +331,7 @@ class TextNode
                 ret += sprintf("\n    %s", String.trim_all_whites(line));
             }
 
-            return sprintf("\n%s\n", ret);
+            return sprintf("%s", ret);
         }
 
         return text;
@@ -256,13 +346,18 @@ class Group
 
     string get_type() { return type; }
 
-    void parse()
+    void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        foreach (self->get_elements(), Parser.XML.Tree.SimpleNode e)
+        foreach (node->get_elements(), Parser.XML.Tree.SimpleNode e)
         {
             string ename = e->get_any_name();
             if (ename == "text")
-                text = TextNode(e)->get_string();
+            {
+                if (text)
+                    text += line() + TextNode(e)->get_string();
+                else
+                    text = TextNode(e)->get_string();
+            }
             else
             {
                 type = ename;
@@ -270,9 +365,6 @@ class Group
                 name = attrs->name || UNDEFINED;
             }
         }
-
-        if (!text)
-            text = "// Missing description\n";
     }
 
     string get_string() { return text; }
@@ -287,15 +379,21 @@ class Doc
     private array(Group) returns = ({ });
     private array(Group) seealsos = ({ });
 
-    void parse()
+    void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        Parser.XML.Tree.SimpleNode text = self->get_first_element("text");
+        Parser.XML.Tree.SimpleNode text = node->get_first_element("text");
         if (text)
-            description = TextNode(text)->get_string();
-
-        foreach (self->get_elements("group"), Parser.XML.Tree.SimpleNode g)
         {
-            Group group = Group(g);
+            if (description)
+                description += line() + TextNode(text)->get_string();
+            else
+                description = TextNode(text)->get_string();
+        }
+
+        foreach (node->get_elements("group"), Parser.XML.Tree.SimpleNode g)
+        {
+            Group group = Group();
+            group->parse(g);
             switch (group->get_type())
             {
                 case "param":
@@ -309,6 +407,10 @@ class Doc
                 break;
                 case "seealso":
                     seealsos += ({ group });
+                break;
+                default:
+                    werror("%s:%d:Unknown <group> type: %O\n",
+                        (__FILE__/"/")[-1], __LINE__, group->get_type());
                 break;
             }
         }
@@ -324,7 +426,7 @@ class Doc
         {
             foreach (params, Group g)
             {
-                ret += sprintf("Parameter %s%s",
+                ret += sprintf("\nParameter %s%O",
                         g->get_name(), g->get_string());
             }
         }
@@ -332,17 +434,17 @@ class Doc
         if (sizeof(returns))
         {
             foreach (returns, Group g)
-                ret += sprintf("Returns%s", g->get_string());
+                ret += sprintf("\nReturns%s", g->get_string());
         }
 
         if (sizeof(notes))
         {
             foreach (notes, Group g)
-                ret += sprintf("Note%s", g->get_string());
+                ret += sprintf("\nNote%s", g->get_string());
         }
 
         if (sizeof(seealsos))
-            ret += sprintf("See also%s", seealsos->get_string()*", ");
+            ret += sprintf("\nSee also%s", seealsos->get_string()*", ");
 
         return ret;
     }
@@ -351,27 +453,13 @@ class Doc
 class DocGroup
 {
     inherit Base;
-    protected string path;
-    protected string parent_path;
-    protected string filename;
+    protected void process_node(Parser.XML.Tree.SimpleNode node);
 
-    void create(Parser.XML.Tree.SimpleNode node, string _parent_path)
+    void save(string parent_path)
     {
-        ::create(node, true);
-        name = attributes["homogen-name"];
-        parent_path = _parent_path;
-        if (name)
-        {
-            path = ({ parent_path, Protocols.HTTP.uri_encode(name) })*"/";
-            filename = path + ".txt";
-        }
-        parse();
-    }
+        string filename = combine_path(parent_path,
+                Protocols.HTTP.uri_encode(name)) + ".txt";
 
-    void parse();
-
-    protected void save()
-    {
         if (Stdio.exist(filename))
             Stdio.append_file(filename, ({ line(), get_string() })*"\n");
         else
@@ -379,61 +467,61 @@ class DocGroup
     }
 }
 
+class DocMethod
+{
+    inherit DocGroup;
+    array(Method) methods = ({ });
+    Doc doc;
+
+    void create(string n, array(Method) m, Doc d)
+    {
+        name = n;
+        methods = m;
+        doc = d;
+    }
+
+    string get_string()
+    {
+        return sprintf("Method %s()%s    %s\n\n%s", name, line(),
+            methods->get_string()*"\n    ", doc || "");
+    }
+}
+
 class DocGroupM
 {
     inherit DocGroup;
-    private Doc doc;
-    private array(Method) methods = ({ });
+    array(DocMethod) docmethods = ({ });
+    protected string parent_path;
 
-    void parse()
+    void create(string _parent_path)
     {
-        doc = Doc(self->get_first_element("doc"));
-        foreach (self->get_elements("method"), Parser.XML.Tree.SimpleNode m)
-            methods += ({ Method(m) });
-        save();
+        parent_path = _parent_path;
     }
 
-    string get_string(void|Method m)
+    protected void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        string local_name = m && m->get_name() || name;
-        return sprintf("Method %s\n\n    %s\n\n%s", local_name,
-                methods->get_string()*"\n    ", doc);
-    }
-
-    string get_name()
-    {
-        if (name)
-            return name;
-        else
-            return methods->get_name()*"\n";
-    }
-
-    protected void save()
-    {
-        if (name)
+        array(Method) methods = ({ });
+        Doc d;
+        Parser.XML.Tree.SimpleNode docnode = node->get_first_element("doc");
+        if (docnode)
         {
-            if (Stdio.exist(filename))
-                Stdio.append_file(filename, ({ line(), string_to_utf8(get_string()) })*"\n");
-            else
-                Stdio.write_file(filename, string_to_utf8(get_string()));
+            d = Doc();
+            d->parse(docnode);
         }
+
+        foreach (node->get_elements("method"), Parser.XML.Tree.SimpleNode m)
+        {
+            Method method = Method();
+            method->parse(m);
+            methods += ({ method });
+        }
+
+        if (name)
+            docmethods += ({ DocMethod(name, methods, d) });
         else
         {
             foreach (methods, Method m)
-            {
-                string path = ({ parent_path,
-                    Protocols.HTTP.uri_encode(m->get_name()) })*"/";
-
-                string filename = path + ".txt";
-
-                if (Stdio.exist(filename))
-                {
-                    Stdio.append_file(filename,
-                        ({ line(), string_to_utf8(get_string(m)) })*"\n");
-                }
-                else
-                    Stdio.write_file(filename, string_to_utf8(get_string(m)));
-            }
+                docmethods += ({ DocMethod(m->get_name(), methods, d) });
         }
     }
 }
@@ -444,10 +532,12 @@ class DocGroupV
     private Doc doc;
     private Variable variable;
 
-    void parse()
+    void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        doc = Doc(self->get_first_element("doc"));
-        variable = Variable(self->get_first_element("variable"));
+        doc = Doc();
+        doc->parse(node->get_first_element("doc"));
+        variable = Variable();
+        variable->parse(node->get_first_element("variable"));
     }
 
     string get_string()
@@ -462,13 +552,20 @@ class DocGroupC
     Doc doc;
     private array(Constant) constants = ({ });
 
-    void parse()
+    void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        if (self->get_first_element("doc"))
-            doc = Doc(self->get_first_element("doc"));
+        if (node->get_first_element("doc"))
+        {
+            doc = Doc();
+            doc->parse(node->get_first_element("doc"));
+        }
 
-        foreach (self->get_elements("constant"), Parser.XML.Tree.SimpleNode c)
-            constants += ({ Constant(c) });
+        foreach (node->get_elements("constant"), Parser.XML.Tree.SimpleNode c)
+        {
+            Constant _const = Constant();
+            _const->parse(c);
+            constants += ({ _const });
+        }
     }
 
     string get_string()
@@ -480,106 +577,112 @@ class DocGroupC
 class Container
 {
     inherit Base;
-    protected string path;
-    protected string this_path;
-    protected array(string) methods = ({ });
-    protected array(string) classes = ({ });
-    protected array(string) modules = ({ });
+    protected mapping(string:DocMethod) methods = ([ ]);
+    protected mapping(string:Class) classes = ([ ]);
+    protected mapping(string:Module) modules = ([ ]);
     protected array(DocGroupV) variables = ({ });
     protected array(DocGroupC) constants = ({ });
     protected Doc doc;
 
-    void create(Parser.XML.Tree.SimpleNode node, string parent_path)
+    protected void process_node(Parser.XML.Tree.SimpleNode node)
     {
-        ::create(node, true);
-        path = ({ parent_path, name })*"/";
-        this_path = ({ path, "__this__" })*"/";
-        Stdio.mkdirhier(this_path);
-        parse();
-        save();
-    }
-
-    void parse()
-    {
-        Parser.XML.Tree.SimpleNode d = self->get_first_element("doc");
+        Parser.XML.Tree.SimpleNode d = node->get_first_element("doc");
         if (d)
-            doc = Doc(d);
+        {
+            if (!doc)
+                doc = Doc();
+            doc->parse(d);
+        }
 
-        foreach (self->get_elements("class"), Parser.XML.Tree.SimpleNode child)
-            classes += ({ Class(child, path)->get_name() });
+        foreach (node->get_elements("class"), Parser.XML.Tree.SimpleNode child)
+        {
+            mapping(string:mixed) attrs = child->get_attributes();
+            string cname = attrs->name || "";
+            if (has_index(classes, cname))
+                classes[cname]->parse(child);
+            else
+            {
+                classes[cname] = Class();
+                classes[cname]->parse(child);
+            }
+        }
 
-        foreach (self->get_elements("module"), Parser.XML.Tree.SimpleNode child)
-            modules += ({ Module(child, path)->get_name() });
+        foreach (node->get_elements("module"), Parser.XML.Tree.SimpleNode child)
+        {
+            mapping(string:mixed) attrs = child->get_attributes();
+            string mname = attrs->name || "";
+            if (has_index(modules, mname))
+                modules[mname]->parse(child);
+            else
+            {
+                modules[mname] = Module();
+                modules[mname]->parse(child);
+            }
+        }
 
-        foreach (self->get_elements("docgroup"), Parser.XML.Tree.SimpleNode node)
+        foreach (node->get_elements("docgroup"), Parser.XML.Tree.SimpleNode node)
         {
             mapping(string:string) attrs = node->get_attributes();
             switch (attrs["homogen-type"])
             {
                 case "method":
-                    methods += ({ DocGroupM(node, path)->get_name() });
-                break;
+                    DocGroupM dgm = DocGroupM("");
+                    dgm->parse(node);
+                    foreach (dgm->docmethods, DocMethod dm)
+                    {
+                        if (has_index(methods, dm->get_name()))
+                        {
+                            methods[dm->get_name()]->methods = Array.uniq(
+                                methods[dm->get_name()]->methods + dm->methods);
+
+                            if (!methods[dm->get_name()]->doc)
+                                methods[dm->get_name()]->doc = dm->doc;
+                        }
+                        else
+                            methods[dm->get_name()] = dm;
+                    };
+                    break;
 
                 case "variable":
-                    variables += ({ DocGroupV(node, path) });
+                    DocGroupV dgv = DocGroupV();
+                    dgv->parse(node);
+                    variables += ({ dgv });
                 break;
 
                 case "constant":
-                    constants += ({ DocGroupC(node, path) });
-                break;
+                    DocGroupC dgc = DocGroupC();
+                    dgc->parse(node);
+                    constants += ({ dgc });
+                    break;
 
                 default:
-                    // FIXME: (grodzik) debug print - remove me
-                    werror("grodzik:%s:%d: attrs[\"homogen-type\"]: %O\n", (__FILE__/"/")[-1], __LINE__, attrs["homogen-type"]);
+                    werror("%s:%d: unknown homogen-type: %O\n", (__FILE__/"/")[-1],
+                            __LINE__, attrs["homogen-type"]);
+                    break;
             }
         }
     }
 
-    array(string) get_list(string file, array(string) list)
-    {
-        if (Stdio.exist(file))
-            list += (Stdio.read_file(file)/"\n");
-
-        array(string) ret = ({ });
-        foreach (list; int i; string v)
-        {
-            v = String.trim_all_whites(v);
-            if (strlen(v))
-                ret += ({ v });
-        }
-
-        return Array.uniq(Array.sort_array(ret));
-    }
-
     string get_type() { return "Container"; }
 
-    void save()
+    void save(string parent_path)
     {
+        string path = ({ parent_path, name })*"/";
+        string this_path = ({ path, "__this__" })*"/";
+        Stdio.mkdirhier(this_path);
+
         if (!Stdio.exist(combine_path(this_path, "type")))
             Stdio.write_file(combine_path(this_path, "type"), get_type());
 
         if (string d = get_string())
         {
             Stdio.append_file(combine_path(this_path, "description"),
-                    sprintf("%s\n\n%s\n\n%s\n", doc || "", line(), d));
+                get_string());
         }
 
-        mapping(string:array(string)) lists = ([
-            "modules": modules,
-            "classes": classes,
-            "methods": methods
-        ]);
-
-        foreach (lists; string key; array(string) list)
-        {
-            if (sizeof(list))
-            {
-                string file = combine_path(this_path, key);
-                list = get_list(file, list);
-
-                Stdio.write_file(file,sprintf("    %s\n", list*"\n    "));
-            }
-        }
+        values(methods)->save(path);
+        values(classes)->save(path);
+        values(modules)->save(path);
     }
 
     string get_string()
@@ -618,8 +721,8 @@ class Class
 
     string get_string()
     {
-        if (doc)
-            return sprintf("Class %s\n\n%s\n", name, doc);
+        return sprintf("Class %s%s%s\n", name, line(),
+            doc || get_table(Array.sort(indices(methods))[*]+"()"));
     }
 }
 
@@ -631,8 +734,8 @@ class Module
 
     string get_string()
     {
-        if (doc)
-            return sprintf("Module %s\n\n%s\n", name, doc);
+        return sprintf("Module %s%s%s\n", name, line(),
+            doc || get_table(Array.sort(indices(methods))[*]+"()"));
     }
 }
 
@@ -644,10 +747,12 @@ class Namespace
 
     string get_string()
     {
-        if (doc)
-            return sprintf("Namespace %s\n\n%s\n", name, doc);
+        return sprintf("Namespace %s%s%s\n", name, line(),
+            doc || get_table(Array.sort(indices(methods))[*]+"()"));
     }
 }
+
+mapping(string:Namespace) namespaces = ([ ]);
 
 void|int parse_node(Parser.XML.Tree.SimpleNode node, string path)
 {
@@ -660,13 +765,24 @@ void|int parse_node(Parser.XML.Tree.SimpleNode node, string path)
 
         case "namespace":
             if (attrs->name)
-                Namespace namespace = Namespace(node, path);
+            {
+                Namespace namespace = namespaces[attrs->name]
+                    || Namespace();
+                namespace->parse(node);
+
+                namespaces[attrs->name] = namespace;
+
+            }
         break;
 
         default:
             string r = node->get_any_name();
-            if (strlen(r))
-                werror("grodzik: %s\n", r);
+            int t = node->get_node_type();
+
+            if (!(<Parser.XML.Tree.XML_TEXT,
+                Parser.XML.Tree.XML_HEADER>)[t])
+                werror("Uknown high-level node(%O): %O\n", t, strlen(r) ? r : node);
+        break;
     }
 }
 
@@ -891,6 +1007,8 @@ int main(int n, array(string) args)
         ({ "verbose",    Getopt.NO_ARG,  "-v,--verbose"/"," }),
         ({ "quiet",      Getopt.NO_ARG,  "-q,--quiet"/"," }),
         ({ "help",       Getopt.NO_ARG,  "-h,--help"/"," }),
+        ({ "columns",    Getopt.HAS_ARG, "--columns" }),
+        ({ "width",      Getopt.HAS_ARG, "--width" }),
     });
 
     foreach(Getopt.find_all_options(args, opts), array opt)
@@ -962,12 +1080,23 @@ int main(int n, array(string) args)
                         "\t     [--imgdir=<imgdir>] [--root=<module>]\n"
                         "\t     [file1 [... filen]]\n");
                 return 0;
+            case "columns":
+                columns = (int)opt[1];
+                break;
+            case "width":
+                width = (int)opt[1];
+                break;
         }
     }
 
     verbosity = flags & Tools.AutoDoc.FLAG_VERB_MASK;
 
     args = args[1..] - ({ 0 });
+
+    Stdio.recursive_rm(builddir);
+    Stdio.recursive_rm(imgdir);
+    Stdio.mkdirhier(builddir);
+    Stdio.mkdirhier(imgdir);
 
     if (srcdir)
         recurse(srcdir, builddir, 0, root);
@@ -1026,6 +1155,8 @@ int main(int n, array(string) args)
         werror("No source directory or input files given.\n");
         return 1;
     }
+
+    values(namespaces)->save(builddir);
 
     string data = gather_data(builddir);
     string index = "";
