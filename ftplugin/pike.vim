@@ -74,7 +74,7 @@ function s:pikedoc(...) abort
 endfunction
 
 function! s:pikedoc_indexfile() dict abort
-    return s:plugindir . "/pikedoc/index.txt"
+    return s:plugindir . "/pikedoc/pikedoc_index.txt"
 endfunction
 
 function! s:pikedoc_clear_docs() dict abort
