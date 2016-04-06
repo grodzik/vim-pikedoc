@@ -32,16 +32,17 @@ spawn new window with each call.
 
 ## Mappings
 
-### Local key mappings
+### Previe-window key mappings
 | Combination | Description |
 | --- | --- |
+| `f` | goto definition of a word under the cursor |
 | `q` | close preview window |
 | `p` | display description of parent module/class/namespace |
 | `m` | show list of methods for current module/class/namespace |
 | `M` | show list of modules for current module/class/namespace |
 | `c` | show list of classes for current module/class/namespace |
 
-### Global key mappings
+### Key mappings for pike source files
 
 If you set
 ```VimL
