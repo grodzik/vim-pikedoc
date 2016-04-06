@@ -104,6 +104,8 @@ function! s:pikedoc_generate_index() dict abort
             let cmd = cmd . " --srcdir=" . glob(src)
         endif
 
+        echom cmd
+
         silent! execute cmd
     endfor
 endfunction
@@ -235,6 +237,7 @@ function! s:Show(...) abort
     execute "nnoremap <buffer> <silent> m :<C-U>call <SID>Show('".pikedoc.methods()."')<cr>"
     execute "nnoremap <buffer> <silent> M :<C-U>call <SID>Show('".pikedoc.modules()."')<cr>"
     execute "nnoremap <buffer> <silent> c :<C-U>call <SID>Show('".pikedoc.classes()."')<cr>"
+    execute "nnoremap <buffer> <silent> f :<C-U>call <SID>Show()<cr>"
 endfunction
 
 function! s:Generate() abort
