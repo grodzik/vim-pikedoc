@@ -212,10 +212,17 @@ function! s:pikedoc_classes() dict abort
     return self.get_this_path("classes")
 endfunction
 
+function! s:pikedoc_dump() dict abort
+    echom "pikedoc file: " . self.file
+    if has_key(self, "menu")
+        echom "pikedoc menu: " . join(self.menu, ", ")
+    endif
+endfunction
+
 call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
             \'find_doc', 'get_name', 'open', 'parent', 'fill_with',
             \'has_doc', 'methods', 'modules', 'classes', 'get_this_path',
-            \'clear_docs'])
+            \'clear_docs', 'dump'])
 
 function! s:Show(...) abort
     if a:0 && a:1 is 0
