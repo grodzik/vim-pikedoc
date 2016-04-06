@@ -131,14 +131,15 @@ function! s:pikedoc_find_doc(name) dict abort
         call self.read_index()
     endif
 
-    let l:list = split(substitute(a:name, '\(\->\|\.\|::\)', " ", "g"))
+    let l:subject = substitute(a:name, '\(^\*\|\*$\|(.*\*$\)', "", "g")
+    let l:list = split(substitute(l:subject, '\([^`]\|^\)\(\->\|\.\|::\)', '\1 ', "g"))
     if len(l:list)
         let l:key = l:list[-1]
     else
-        let l:key = a:name
+        let l:key = l:subject
     endif
 
-    let l:key = substitute(l:key, "(.*)", "", "")
+    let l:key = substitute(l:key, "(.*", "", "")
     let l:key = substitute(l:key, "\[^a-zA-Z_0-9\]", "", "g")
 
     if has_key(s:index, l:key)
@@ -259,7 +260,7 @@ function! s:Show(...) abort
     call pikedoc.open()
 
     wincmd P
-    setlocal nobuflisted nowrap bufhidden=wipe ft=help
+    setlocal nobuflisted nowrap bufhidden=wipe ft=pikedoc cole=3
     nnoremap <buffer> <silent> q :bd<cr>
     execute "nnoremap <buffer> <silent> p :<C-U>call <SID>Show('".pikedoc.parent()."')<cr>"
     execute "nnoremap <buffer> <silent> m :<C-U>call <SID>Show('".pikedoc.methods()."')<cr>"

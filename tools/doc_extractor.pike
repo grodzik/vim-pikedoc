@@ -132,7 +132,13 @@ class Base
         process_node(node);
     }
 
-    string get_name() { return name; }
+    string get_name(bool vimsyntax)
+    {
+        if (vimsyntax)
+            return sprintf("*%s*", name);
+
+        return name;
+    }
 
     mixed cast(string t)
     {
@@ -269,7 +275,7 @@ class Method
 
     string get_string()
     {
-        return sprintf("%s %s(%s)", returns, name, args->get_string()*", ");
+        return sprintf("%s %s(%s)", returns, get_name(0), args->get_string()*", ");
     }
 }
 
@@ -306,18 +312,25 @@ class Constant
 class TextNode
 {
     protected string text = "";
+    protected string name;
     protected Parser.XML.Tree.SimpleNode self;
 
     void create(Parser.XML.Tree.SimpleNode node)
     {
         self = node;
+        name = self->get_any_name();
 
         if (self->get_node_type() == Parser.XML.Tree.XML_TEXT)
             text = self->value_of_node();
         else
         {
             foreach (self->get_children(), Parser.XML.Tree.SimpleNode c)
-                text += TextNode(c)->get_string();
+            {
+                if (name == "ref")
+                    text += sprintf("*%s*", TextNode(c)->get_string());
+                else
+                    text += TextNode(c)->get_string();
+            }
         }
     }
 
@@ -367,17 +380,18 @@ class Group
         }
     }
 
-    string get_string() { return text; }
+    string get_string()
+    {
+        return sprintf("%s%s\n    %s", String.capitalize(type),
+            name ? " " + name : "", text || "");
+    }
 }
 
 class Doc
 {
     inherit Base;
     private string description;
-    private array(Group) params = ({ });
-    private array(Group) notes = ({ });
-    private array(Group) returns = ({ });
-    private array(Group) seealsos = ({ });
+    private array(Group) groups = ({ });
 
     void process_node(Parser.XML.Tree.SimpleNode node)
     {
@@ -402,27 +416,7 @@ class Doc
                         g->value_of_node(), node, name);
             }
             else
-            {
-                switch (group->get_type())
-                {
-                    case "param":
-                        params += ({ group });
-                        break;
-                    case "note":
-                        notes += ({ group });
-                        break;
-                    case "returns":
-                        returns += ({ group });
-                        break;
-                    case "seealso":
-                        seealsos += ({ group });
-                        break;
-                    default:
-                        werror("%s:%d:Unknown <group> type: %O\n",
-                                (__FILE__/"/")[-1], __LINE__, group->get_type());
-                        break;
-                }
-            }
+                groups += ({ group });
         }
     }
 
@@ -430,31 +424,10 @@ class Doc
     {
         string ret = "";
         if (description)
-            ret = sprintf("Description%s", description);
+            ret = sprintf("Description%s\n", description);
 
-        if (sizeof(params))
-        {
-            foreach (params, Group g)
-            {
-                ret += sprintf("\nParameter %s%O",
-                        g->get_name(), g->get_string());
-            }
-        }
-
-        if (sizeof(returns))
-        {
-            foreach (returns, Group g)
-                ret += sprintf("\nReturns%s", g->get_string());
-        }
-
-        if (sizeof(notes))
-        {
-            foreach (notes, Group g)
-                ret += sprintf("\nNote%s", g->get_string());
-        }
-
-        if (sizeof(seealsos))
-            ret += sprintf("\nSee also%s", seealsos->get_string()*", ");
+        if (sizeof(groups))
+            ret += groups->get_string()*"\n";
 
         return ret;
     }
@@ -493,7 +466,7 @@ class DocMethod
 
     string get_string()
     {
-        return sprintf("Method %s()%s    %s\n\n%s", name, line(),
+        return sprintf("Method %s()%s    %s\n\n%s", get_name(1), line(),
             methods->get_string()*"\n    ", doc || "");
     }
 }
@@ -532,7 +505,7 @@ class DocGroupM
         else
         {
             foreach (methods, Method m)
-                docmethods += ({ DocMethod(m->get_name(), methods, d) });
+                docmethods += ({ DocMethod(m->get_name(0), methods, d) });
         }
     }
 }
@@ -641,16 +614,16 @@ class Container
                     dgm->parse(node);
                     foreach (dgm->docmethods, DocMethod dm)
                     {
-                        if (has_index(methods, dm->get_name()))
+                        if (has_index(methods, dm->get_name(0)))
                         {
-                            methods[dm->get_name()]->methods = Array.uniq(
-                                methods[dm->get_name()]->methods + dm->methods);
+                            methods[dm->get_name(0)]->methods = Array.uniq(
+                                methods[dm->get_name(0)]->methods + dm->methods);
 
-                            if (!methods[dm->get_name()]->doc)
-                                methods[dm->get_name()]->doc = dm->doc;
+                            if (!methods[dm->get_name(0)]->doc)
+                                methods[dm->get_name(0)]->doc = dm->doc;
                         }
                         else
-                            methods[dm->get_name()] = dm;
+                            methods[dm->get_name(0)] = dm;
                     };
                     break;
 
@@ -707,7 +680,7 @@ class Container
             foreach (constants, DocGroupC c)
             {
                 ret += sprintf("\nConstant %s\n%s\n",
-                        c->get_name(), c->get_string());
+                        c->get_name(1), c->get_string());
             }
         }
 
@@ -716,7 +689,7 @@ class Container
             foreach (variables, DocGroupV v)
             {
                 ret += sprintf("\nVariable %s\n%s\n",
-                        v->get_name(), v->get_string());
+                        v->get_name(1), v->get_string());
             }
         }
 
@@ -732,8 +705,8 @@ class Class
 
     string get_string()
     {
-        return sprintf("Class %s%s%s\n", name, line(),
-            doc || get_table(Array.sort(indices(methods))[*]+"()"));
+        return sprintf("Class %s%s%s\n", get_name(1), line(),
+            doc || get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
     }
 }
 
@@ -745,8 +718,8 @@ class Module
 
     string get_string()
     {
-        return sprintf("Module %s%s%s\n", name, line(),
-            doc || get_table(Array.sort(indices(methods))[*]+"()"));
+        return sprintf("Module %s%s%s\n", get_name(1), line(),
+            doc || get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
     }
 }
 
@@ -758,8 +731,8 @@ class Namespace
 
     string get_string()
     {
-        return sprintf("Namespace %s%s%s\n", name, line(),
-            doc || get_table(Array.sort(indices(methods))[*]+"()"));
+        return sprintf("Namespace %s%s%s\n", get_name(1), line(),
+            doc || get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
     }
 }
 
