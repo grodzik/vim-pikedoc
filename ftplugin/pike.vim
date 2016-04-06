@@ -131,25 +131,37 @@ function! s:pikedoc_find_doc(name) dict abort
         call self.read_index()
     endif
 
-    let l:list = split(substitute(a:name, "\[.\]", " ", "g"))
+    let l:list = split(substitute(a:name, '\(\->\|\.\|::\)', " ", "g"))
     if len(l:list)
         let l:key = l:list[-1]
     else
         let l:key = a:name
     endif
 
+    let l:key = substitute(l:key, "(.*)", "", "")
     let l:key = substitute(l:key, "\[^a-zA-Z_0-9\]", "", "g")
 
     if has_key(s:index, l:key)
         let file = get(s:index, l:key)
         let l:filelist = split(file, ",")
-        if len(l:filelist) && len(l:list)
+        if len(l:filelist) && len(l:list) > 1
             let subpath = join(l:list[0:-2], "/") . "/" . l:key
             let pos = match(l:filelist, subpath)
             if pos >= 0
                 let self.file = l:filelist[pos]
                 return 1
             endif
+        elseif len(l:filelist)
+            let choose_menu = []
+            for f in l:filelist
+                let f = substitute(f, glob(s:plugindir . "/pikedoc/"), "", "g")
+                let f = substitute(f, "/", "::", "")
+                let f = substitute(f, "/", ".", "g")
+                let choose_menu += [fnamemodify(f, ":r")]
+            endfor
+            let self.menu = choose_menu
+            let self.file = "/tmp/pikedoc_menu"
+            return 1
         endif
         let self.file = file
         return 1
@@ -175,7 +187,12 @@ function! s:pikedoc_fill_with(content) dict abort
 endfunction
 
 function! s:pikedoc_open() dict abort
-    let content = readfile(self.file)
+    let content = []
+    if filereadable(self.file)
+        let content = readfile(self.file)
+    elseif has_key(self, 'menu') && len(self.menu)
+        let content = self.menu
+    endif
     call self.fill_with(content)
 endfunction
 
@@ -242,7 +259,7 @@ function! s:Show(...) abort
     call pikedoc.open()
 
     wincmd P
-    setlocal nobuflisted nowrap bufhidden=wipe
+    setlocal nobuflisted nowrap bufhidden=wipe ft=help
     nnoremap <buffer> <silent> q :bd<cr>
     execute "nnoremap <buffer> <silent> p :<C-U>call <SID>Show('".pikedoc.parent()."')<cr>"
     execute "nnoremap <buffer> <silent> m :<C-U>call <SID>Show('".pikedoc.methods()."')<cr>"
