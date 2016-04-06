@@ -394,24 +394,34 @@ class Doc
         {
             Group group = Group();
             group->parse(g);
-            switch (group->get_type())
+            if (!group->get_string())
             {
-                case "param":
-                    params += ({ group });
-                break;
-                case "note":
-                    notes += ({ group });
-                break;
-                case "returns":
-                    returns += ({ group });
-                break;
-                case "seealso":
-                    seealsos += ({ group });
-                break;
-                default:
-                    werror("%s:%d:Unknown <group> type: %O\n",
-                        (__FILE__/"/")[-1], __LINE__, group->get_type());
-                break;
+                werror("Missing text for group node: %O, group name: %O, "
+                        "value: %O, "
+                        "parent: %O, parent_name:%O\n", g, group->name,
+                        g->value_of_node(), node, name);
+            }
+            else
+            {
+                switch (group->get_type())
+                {
+                    case "param":
+                        params += ({ group });
+                        break;
+                    case "note":
+                        notes += ({ group });
+                        break;
+                    case "returns":
+                        returns += ({ group });
+                        break;
+                    case "seealso":
+                        seealsos += ({ group });
+                        break;
+                    default:
+                        werror("%s:%d:Unknown <group> type: %O\n",
+                                (__FILE__/"/")[-1], __LINE__, group->get_type());
+                        break;
+                }
             }
         }
     }
@@ -460,10 +470,11 @@ class DocGroup
         string filename = combine_path(parent_path,
                 Protocols.HTTP.uri_encode(name)) + ".txt";
 
+        string content = string_to_utf8(get_string());
         if (Stdio.exist(filename))
-            Stdio.append_file(filename, ({ line(), get_string() })*"\n");
+            Stdio.append_file(filename, ({ line(), content })*"\n");
         else
-            Stdio.write_file(filename, get_string());
+            Stdio.write_file(filename, content);
     }
 }
 
@@ -677,7 +688,7 @@ class Container
         if (string d = get_string())
         {
             Stdio.append_file(combine_path(this_path, "description"),
-                get_string());
+                string_to_utf8(d));
         }
 
         values(methods)->save(path);
@@ -754,13 +765,13 @@ class Namespace
 
 mapping(string:Namespace) namespaces = ([ ]);
 
-void|int parse_node(Parser.XML.Tree.SimpleNode node, string path)
+void|int parse_node(Parser.XML.Tree.SimpleNode node)
 {
     mapping(string:mixed) attrs = node->get_attributes();
     switch (node->get_any_name())
     {
         case "autodoc":
-            node->iterate_children(parse_node, path);
+            node->iterate_children(parse_node);
         break;
 
         case "namespace":
@@ -957,7 +968,7 @@ void recurse(string srcdir, string builddir, int root_ts, array(string) root)
                     exit(1);
                 }
 
-                root_node->iterate_children(parse_node, builddir);
+                root_node->iterate_children(parse_node);
             }
         }
     }
@@ -969,6 +980,9 @@ string gather_data(string target)
     foreach (get_dir(target), string name)
     {
         if (name == "__this__")
+            continue;
+
+        if (name == "pikedoc_index.txt")
             continue;
 
         string path = combine_path(target, name);
@@ -988,7 +1002,10 @@ string gather_data(string target)
 
 int main(int n, array(string) args)
 {
-    string srcdir, builddir = "./";
+    string srcdir, targetdir = "./";
+    string builddir = "/tmp/pikedoc_builddir/";
+    imgdir = combine_path(builddir, "images/");
+
     array(string) root = ({"predef::"});
 
     int return_count;
@@ -1009,6 +1026,7 @@ int main(int n, array(string) args)
         ({ "help",       Getopt.NO_ARG,  "-h,--help"/"," }),
         ({ "columns",    Getopt.HAS_ARG, "--columns" }),
         ({ "width",      Getopt.HAS_ARG, "--width" }),
+        ({ "targetdir",  Getopt.HAS_ARG, "--targetdir" }),
     });
 
     foreach(Getopt.find_all_options(args, opts), array opt)
@@ -1086,6 +1104,10 @@ int main(int n, array(string) args)
             case "width":
                 width = (int)opt[1];
                 break;
+            case "targetdir":
+                targetdir = combine_path(getcwd(), opt[1]);
+                if(targetdir[-1]!='/') targetdir += "/";
+                break;
         }
     }
 
@@ -1093,8 +1115,7 @@ int main(int n, array(string) args)
 
     args = args[1..] - ({ 0 });
 
-    Stdio.recursive_rm(builddir);
-    Stdio.recursive_rm(imgdir);
+    Stdio.mkdirhier(targetdir);
     Stdio.mkdirhier(builddir);
     Stdio.mkdirhier(imgdir);
 
@@ -1156,9 +1177,9 @@ int main(int n, array(string) args)
         return 1;
     }
 
-    values(namespaces)->save(builddir);
+    values(namespaces)->save(targetdir);
 
-    string data = gather_data(builddir);
+    string data = gather_data(targetdir);
     string index = "";
     mapping(string:array(string)) tmp_index = ([ ]);
 
@@ -1177,7 +1198,11 @@ int main(int n, array(string) args)
     foreach (tmp_index; string key; array(string) paths)
         index += sprintf("%s %s\n", key, paths*",");
 
-    Stdio.write_file(combine_path(builddir, "index.txt"), index);
+    Stdio.write_file(combine_path(targetdir, "pikedoc_index.txt"), index);
+
+    Stdio.recursive_rm(builddir);
+    if (Stdio.exist(imgdir))
+        Stdio.recursive_rm(imgdir);
 
     if (return_count)
         return num_updated_files;

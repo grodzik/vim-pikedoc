@@ -89,16 +89,20 @@ function! s:pikedoc_clear_docs() dict abort
 endfunction
 
 function! s:pikedoc_generate_index() dict abort
-    silent! execute "!mkdir -p " . s:plugindir . "/pikedoc/images"
     for src in g:pikedoc_pike_sources
         let cmd = "!" . g:pikedoc_pike_cmd . " "
                     \. s:plugindir . "/tools/doc_extractor.pike "
-                    \. "--builddir=" .  s:plugindir . "/pikedoc"
+                    \. "--targetdir=" .  s:plugindir . "/pikedoc "
         if type(src) == type({})
             let cmd = cmd . " --srcdir=" . glob(src["path"])
+            if has_key(src, 'builddir')
+                let cmd = cmd . " --builddir=" . glob(src['builddir'])
+            endif
             if has_key(src, 'imgsrc')
                 let cmd = cmd . " --imgsrc=" . glob(src['imgsrc'])
-                let cmd = cmd . " --imgdir=" . s:plugindir . "/pikedoc/images"
+            endif
+            if has_key(src, 'imgdir')
+                let cmd = cmd . " --imgdir=" . glob(src['imgdir'])
             endif
         else
             let cmd = cmd . " --srcdir=" . glob(src)
