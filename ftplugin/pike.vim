@@ -131,6 +131,8 @@ function! s:pikedoc_find_doc(name) dict abort
         call self.read_index()
     endif
 
+    echom 'pikedoc name '.a:name
+
     let l:subject = substitute(a:name, '\(^\*\|\*$\|(.*\*$\)', "", "g")
     let l:list = split(substitute(l:subject, '\([^`]\|^\)\(\->\|\.\|::\)', '\1 ', "g"))
     if len(l:list)
@@ -203,8 +205,12 @@ endfunction
 
 function! s:pikedoc_get_this_path(what) dict abort
     let path = fnamemodify(self.file, ":h")
+    let fname = fnamemodify(self.file, ":t:r")
     if fnamemodify(path, ":t:r") != "__this__"
         let path = path."/__this__/"
+    endif
+    if fname == "description" && a:what == "description"
+        let path = path."/../../__this__/"
     endif
     let path = path."/".a:what
     if filereadable(path)
@@ -243,6 +249,7 @@ call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
             \'clear_docs', 'dump'])
 
 function! s:Show(...) abort
+    echom 'pikedoc show '.a:0.' | '.(a:0 ? a:1 : "")
     if a:0 && a:1 is 0
         return
     endif

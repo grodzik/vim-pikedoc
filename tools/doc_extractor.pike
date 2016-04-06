@@ -667,6 +667,25 @@ class Container
         values(methods)->save(path);
         values(classes)->save(path);
         values(modules)->save(path);
+
+        if (sizeof(methods))
+        {
+            Stdio.write_file(combine_path(this_path, "methods"),
+                get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
+        }
+
+        if (sizeof(classes))
+        {
+            Stdio.write_file(combine_path(this_path, "classes"),
+                get_table(Array.sort(values(classes)->get_name(1))[*]+"()"));
+        }
+
+        if (sizeof(modules))
+        {
+            Stdio.write_file(combine_path(this_path, "modules"),
+                get_table(Array.sort(values(modules)->get_name(1))[*]+"()"));
+        }
+
     }
 
     string get_string()
