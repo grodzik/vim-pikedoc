@@ -34,7 +34,7 @@ for src in g:pikedoc_pike_sources
     endif
 
     if !isdirectory(glob(path))
-        echo "PikeDoc: source path: " . path . " does not exist."
+        echoerr "PikeDoc: source path: ".path." does not exist."
         finish
     endif
 endfor
@@ -56,7 +56,7 @@ endfunction
 
 function! s:add_to(object, what) abort
     for name in a:what
-        let s:{a:object}_defaults[name] = s:get_function('s:' . a:object . '_' . name)
+        let s:{a:object}_defaults[name] = s:get_function('s:'.a:object.'_'.name)
     endfor
 endfunction
 
@@ -74,38 +74,38 @@ function s:pikedoc(...) abort
 endfunction
 
 function! s:pikedoc_indexfile() dict abort
-    return s:plugindir . "/pikedoc/pikedoc_index.txt"
+    return s:plugindir."/pikedoc/pikedoc_index.txt"
 endfunction
 
 function! s:pikedoc_clear_docs() dict abort
-    if isdirectory(s:plugindir . "/pikedoc")
+    if isdirectory(s:plugindir."/pikedoc")
         if g:pikedoc_confirm_remove
             silent! execute "!echo 'You need to type yes to make it happen' "
-                        \. "&& rm -rI " . s:plugindir . "/pikedoc"
+                        \. "&& rm -rI ".s:plugindir."/pikedoc"
         else
-            silent! execute "!rm -r " . s:plugindir . "/pikedoc"
+            silent! execute "!rm -r ".s:plugindir."/pikedoc"
         endif
     endif
 endfunction
 
 function! s:pikedoc_generate_index() dict abort
     for src in g:pikedoc_pike_sources
-        let cmd = "!" . g:pikedoc_pike_cmd . " "
-                    \. s:plugindir . "/tools/doc_extractor.pike "
-                    \. "--targetdir=" .  s:plugindir . "/pikedoc "
+        let cmd = "!".g:pikedoc_pike_cmd." "
+                    \. s:plugindir."/tools/doc_extractor.pike "
+                    \. "--targetdir=". s:plugindir."/pikedoc "
         if type(src) == type({})
-            let cmd = cmd . " --srcdir=" . glob(src["path"])
+            let cmd = cmd." --srcdir=".glob(src["path"])
             if has_key(src, 'builddir')
-                let cmd = cmd . " --builddir=" . glob(src['builddir'])
+                let cmd = cmd." --builddir=".glob(src['builddir'])
             endif
             if has_key(src, 'imgsrc')
-                let cmd = cmd . " --imgsrc=" . glob(src['imgsrc'])
+                let cmd = cmd." --imgsrc=".glob(src['imgsrc'])
             endif
             if has_key(src, 'imgdir')
-                let cmd = cmd . " --imgdir=" . glob(src['imgdir'])
+                let cmd = cmd." --imgdir=".glob(src['imgdir'])
             endif
         else
-            let cmd = cmd . " --srcdir=" . glob(src)
+            let cmd = cmd." --srcdir=".glob(src)
         endif
 
         silent! execute cmd
@@ -124,27 +124,45 @@ function! s:pikedoc_read_index() dict abort
     endfor
 endfunction
 
-function! s:pikedoc_find_doc(name) dict abort
+function! s:pikedoc_make_keyword() dict abort
+    let l:match = matchstr(self.cWORD,
+                \'\([a-zA-Z:\.\->0-9_]*'.self.cword.'\)')
+    if type(l:match) != type("")
+        let self.keywords = self.cword
+    else
+        let self.keywords = l:match
+    endif
+
+    let l:path = split(substitute(self.keywords,
+                \'\([^`]\|^\)\(\->\|\.\|::\)', '\1 ', "g"))
+
+    let self.path = join(l:path, "/")
+    let self.keyword = l:path[-1] 
+endfunction
+
+function! s:pikedoc_find_doc() dict abort
     if len(s:index) == 0
         call self.read_index()
     endif
 
-    let l:subject = substitute(a:name, '\(^\*\|\*$\|(.*\*$\)', "", "g")
-    let l:list = split(substitute(l:subject, '\([^`]\|^\)\(\->\|\.\|::\)', '\1 ', "g"))
-    if len(l:list)
-        let l:key = l:list[-1]
-    else
-        let l:key = l:subject
+    let full_path = s:plugindir."/pikedoc/".self.path
+    if filereadable(full_path.".txt")
+        let self.file = full_path.".txt"
+        return 1
+    elseif isdirectory(full_path)
+        let self.file = full_path
+        let self.file = self.parent()
+        return 1
     endif
-
-    let l:key = substitute(l:key, "(.*", "", "")
-    let l:key = substitute(l:key, "\[^a-zA-Z_0-9\]", "", "g")
-
-    if has_key(s:index, l:key)
-        let file = get(s:index, l:key)
+    let l:list = split(self.path, "/")
+    if has_key(s:index, self.keyword)
+        let file = get(s:index, self.keyword)
         let l:filelist = split(file, ",")
-        if len(l:filelist) && len(l:list) > 1
-            let subpath = join(l:list[0:-2], "/") . "/" . l:key
+        if len(l:filelist) == 1 && len(l:list) == 1
+            let self.file = l:filelist[0]
+            return 1
+        elseif len(l:filelist) && len(l:list) > 1
+            let subpath = join(l:list[0:-2], "/")."/".self.keyword
             let pos = match(l:filelist, subpath)
             if pos >= 0
                 let self.file = l:filelist[pos]
@@ -153,7 +171,7 @@ function! s:pikedoc_find_doc(name) dict abort
         elseif len(l:filelist)
             let choose_menu = []
             for f in l:filelist
-                let f = substitute(f, glob(s:plugindir . "/pikedoc/"), "", "g")
+                let f = substitute(f, glob(s:plugindir."/pikedoc/"), "", "g")
                 let f = substitute(f, "/", "::", "")
                 let f = substitute(f, "/", ".", "g")
                 let choose_menu += [fnamemodify(f, ":r")]
@@ -163,6 +181,9 @@ function! s:pikedoc_find_doc(name) dict abort
             return 1
         endif
         let self.file = file
+        if isdirectory(self.file)
+            self.file = self.parent()
+        endif
         return 1
     endif
 
@@ -180,7 +201,7 @@ function! s:pikedoc_fill_with(content) dict abort
     cd /tmp
     let name = self.get_name()
     call writefile(a:content, name)
-    silent execute "pedit " . name
+    silent execute "pedit ".name
     call delete(name)
     cd -
 endfunction
@@ -195,12 +216,23 @@ function! s:pikedoc_open() dict abort
     call self.fill_with(content)
 endfunction
 
+function! s:pikedoc_update_buffer() dict abort
+    wincmd P
+    setlocal nobuflisted nowrap bufhidden=wipe ft=pikedoc cole=2 cocu=nc 
+    nnoremap <buffer> <silent> q :bd<cr>
+    execute "nnoremap <buffer> <silent> p :<C-U>call <SID>Open('".self.parent()."')<cr>"
+    execute "nnoremap <buffer> <silent> m :<C-U>call <SID>Open('".self.methods()."')<cr>"
+    execute "nnoremap <buffer> <silent> M :<C-U>call <SID>Open('".self.modules()."')<cr>"
+    execute "nnoremap <buffer> <silent> c :<C-U>call <SID>Open('".self.classes()."')<cr>"
+    execute "nnoremap <buffer> <silent> f :<C-U>call <SID>Follow()<cr>"
+endfunction
+
 function! s:pikedoc_get_name() dict abort
     return fnamemodify(self.file, ":t:r")
 endfunction
 
 function! s:pikedoc_get_this_path(what) dict abort
-    let path = fnamemodify(self.file, ":h")
+    let path = isdirectory(self.file) ? self.file : fnamemodify(self.file, ":h")
     let fname = fnamemodify(self.file, ":t:r")
     if fnamemodify(path, ":t:r") != "__this__"
         let path = path."/__this__/"
@@ -232,43 +264,75 @@ function! s:pikedoc_classes() dict abort
     return self.get_this_path("classes")
 endfunction
 
-function! s:pikedoc_dump() dict abort
-    echom "pikedoc file: " . self.file
-    if has_key(self, "menu")
-        echom "pikedoc menu: " . join(self.menu, ", ")
+function! s:print(d, k)
+    if has_key(a:d, a:k)
+        let t = get(a:d, a:k)
+        if type(t) == type([])
+            let t = join(, ", ")
+        endif
+        echom "pikedoc ".a:k.": ".t
     endif
+endfunction
+
+function! s:pikedoc_dump() dict abort
+    call s:print(self, "file")
+    call s:print(self, "menu")
+    call s:print(self, "cword")
+    call s:print(self, "cWORD")
+    call s:print(self, "path")
+    call s:print(self, "keyword")
+    call s:print(self, "keywords")
 endfunction
 
 call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
             \'find_doc', 'get_name', 'open', 'parent', 'fill_with',
             \'has_doc', 'methods', 'modules', 'classes', 'get_this_path',
-            \'clear_docs', 'dump'])
+            \'clear_docs', 'make_keyword', 'update_buffer', 'dump'])
 
-function! s:Show(...) abort
+function! s:Open(...) abort
     if a:0 && a:1 is 0
         return
     endif
 
-    let word = a:0 ? a:1 : expand("<cWORD>")
-    
-    let pikedoc = s:pikedoc(word)
+    let pikedoc = s:pikedoc(a:0 ? a:1 : '')
 
+    let pikedoc.cword = expand("<cword>")
+    let pikedoc.cWORD = expand("<cWORD>")
+    
     if !pikedoc.has_doc()
-        if !pikedoc.find_doc(word)
+        call pikedoc.make_keyword()
+        if !pikedoc.find_doc()
             return
         endif
     endif
 
     call pikedoc.open()
+    call pikedoc.update_buffer()
+endfunction
 
-    wincmd P
-    setlocal nobuflisted nowrap bufhidden=wipe ft=pikedoc cole=2 cocu=nc 
-    nnoremap <buffer> <silent> q :bd<cr>
-    execute "nnoremap <buffer> <silent> p :<C-U>call <SID>Show('".pikedoc.parent()."')<cr>"
-    execute "nnoremap <buffer> <silent> m :<C-U>call <SID>Show('".pikedoc.methods()."')<cr>"
-    execute "nnoremap <buffer> <silent> M :<C-U>call <SID>Show('".pikedoc.modules()."')<cr>"
-    execute "nnoremap <buffer> <silent> c :<C-U>call <SID>Show('".pikedoc.classes()."')<cr>"
-    execute "nnoremap <buffer> <silent> f :<C-U>call <SID>Show()<cr>"
+function! s:Follow() abort
+    let pikedoc = s:pikedoc()
+
+    let cword = matchstr(expand("<cWORD>"), '\*[^\*]\+\*')
+    if len(cword)
+        let cword = substitute(cword, '\*\([^*]\+\)\*.*', '\1', 'g')
+        let pikedoc.cWORD = cword
+        let pikedoc.cword = split(substitute(cword,
+                    \'\([^`]\|^\)\(\->\|\.\|::\)', '\1 ', "g"))[-1]
+        let pikedoc.cword = substitute(pikedoc.cword, '[^a-zA-Z0-9_]', '', 'g')
+    else
+        return
+    endif
+
+    if !pikedoc.has_doc()
+        call pikedoc.make_keyword()
+        if !pikedoc.find_doc()
+            return
+        endif
+    endif
+
+    call pikedoc.open()
+    call pikedoc.update_buffer()
 endfunction
 
 function! s:Generate() abort
@@ -278,11 +342,11 @@ function! s:Generate() abort
     silent execute ":redraw!"
 endfunction
 
-execute "command! -buffer -nargs=? PikeDoc :call s:Show(<f-args>)"
+execute "command! -buffer -nargs=0 PikeDocOpen :call s:Open()"
 execute "command! -buffer -nargs=0 PikeDocGenerate :call s:Generate()"
 
 if exists('g:pikedoc_define_mappings') && g:pikedoc_define_mappings == 1
     let master_key = exists('g:pikedoc_master_key') ? g:pikedoc_master_key : "g"
-    execute "nnoremap <Leader>".master_key."p :PikeDoc<cr>"
+    execute "nnoremap <Leader>".master_key."p :PikeDocOpen<cr>"
     execute "nnoremap <Leader>".master_key."g :PikeDocGenerate<cr>"
 endif
