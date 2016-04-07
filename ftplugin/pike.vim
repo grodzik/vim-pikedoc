@@ -108,8 +108,6 @@ function! s:pikedoc_generate_index() dict abort
             let cmd = cmd . " --srcdir=" . glob(src)
         endif
 
-        echom cmd
-
         silent! execute cmd
     endfor
 endfunction
@@ -130,8 +128,6 @@ function! s:pikedoc_find_doc(name) dict abort
     if len(s:index) == 0
         call self.read_index()
     endif
-
-    echom 'pikedoc name '.a:name
 
     let l:subject = substitute(a:name, '\(^\*\|\*$\|(.*\*$\)', "", "g")
     let l:list = split(substitute(l:subject, '\([^`]\|^\)\(\->\|\.\|::\)', '\1 ', "g"))
@@ -249,7 +245,6 @@ call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
             \'clear_docs', 'dump'])
 
 function! s:Show(...) abort
-    echom 'pikedoc show '.a:0.' | '.(a:0 ? a:1 : "")
     if a:0 && a:1 is 0
         return
     endif
@@ -267,7 +262,7 @@ function! s:Show(...) abort
     call pikedoc.open()
 
     wincmd P
-    setlocal nobuflisted nowrap bufhidden=wipe ft=pikedoc cole=3
+    setlocal nobuflisted nowrap bufhidden=wipe ft=pikedoc cole=2 cocu="nc" 
     nnoremap <buffer> <silent> q :bd<cr>
     execute "nnoremap <buffer> <silent> p :<C-U>call <SID>Show('".pikedoc.parent()."')<cr>"
     execute "nnoremap <buffer> <silent> m :<C-U>call <SID>Show('".pikedoc.methods()."')<cr>"
