@@ -262,7 +262,7 @@ function! s:Show(...) abort
     call pikedoc.open()
 
     wincmd P
-    setlocal nobuflisted nowrap bufhidden=wipe ft=pikedoc cole=2 cocu="nc" 
+    setlocal nobuflisted nowrap bufhidden=wipe ft=pikedoc cole=2 cocu=nc 
     nnoremap <buffer> <silent> q :bd<cr>
     execute "nnoremap <buffer> <silent> p :<C-U>call <SID>Show('".pikedoc.parent()."')<cr>"
     execute "nnoremap <buffer> <silent> m :<C-U>call <SID>Show('".pikedoc.methods()."')<cr>"
