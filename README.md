@@ -46,7 +46,7 @@ in your `$HOME/.vimrc`, there will be some key mappings added for easy use. This
 ```VimL
 let g:pikedoc_master_key = 'g'
 ```
-`p` is the default setting for what's visible in the table below as `<MasterKey>`
+`g` is the default setting for what's visible in the table below as `<MasterKey>`
 
 | Combination | Command | Description |
 | --- | --- | --- |
@@ -90,7 +90,7 @@ let g:pikedoc_define_mappings = 0
 
  - **g:pikedoc_master_key** - Define own prefix key for mappings
 ```VimL
-let g:pikedoc_master_key = 'p'
+let g:pikedoc_master_key = 'g'
 ```
 
  - **g:pikedoc_confirm_remove** - Should PikeDoc ask before removing auto
