@@ -24,12 +24,6 @@ let g:pikedoc_pike_sources = ['/path/to/your/sources']
 ```
 For description of this variable as well as others go to [Options](https://github.com/grodzik/vim-pikedoc/blob/master/README.md#options).
 
-## Usage
-
-With cursor over a pike method/class/module press `<C-i>` (will be customizable later)
-A window above will popup, you need to close it manually currently, as plugin will
-spawn new window with each call.
-
 ## Mappings
 
 ### Previe-window key mappings
@@ -50,7 +44,7 @@ let g:pikedoc_define_mappings = 1
 ```
 in your `$HOME/.vimrc`, there will be some key mappings added for easy use. This can be further customized with
 ```VimL
-let g:pikedoc_master_key = 'p'
+let g:pikedoc_master_key = 'g'
 ```
 `p` is the default setting for what's visible in the table below as `<MasterKey>`
 
