@@ -244,7 +244,7 @@ function! s:pikedoc_get_this_path(what) dict abort
     if filereadable(path)
         return path
     else
-        return 0
+        return -1
     endif
 endfunction
 
@@ -290,7 +290,7 @@ call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
             \'clear_docs', 'make_keyword', 'update_buffer', 'dump'])
 
 function! s:Open(...) abort
-    if a:0 && a:1 is 0
+    if a:0 && a:1 == -1
         return
     endif
 
