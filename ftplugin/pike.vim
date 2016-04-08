@@ -174,7 +174,7 @@ function! s:pikedoc_find_doc() dict abort
                 let f = substitute(f, glob(s:plugindir."/pikedoc/"), "", "g")
                 let f = substitute(f, "/", "::", "")
                 let f = substitute(f, "/", ".", "g")
-                let choose_menu += [fnamemodify(f, ":r")]
+                let choose_menu += ['*'.fnamemodify(f, ":r").'*']
             endfor
             let self.menu = choose_menu
             let self.file = "/tmp/pikedoc_menu"
