@@ -719,6 +719,9 @@ class Container
                     constants += ({ dgc });
                     break;
 
+                case "import":
+                break;
+
                 default:
                     werror("%s:%d: unknown homogen-type: %O\n", (__FILE__/"/")[-1],
                             __LINE__, attrs["homogen-type"]);
