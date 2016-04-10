@@ -41,7 +41,27 @@ string line(void|int w)
     return sprintf("\n%'-'" + (w || min(80, width)) + "s\n", "");
 }
 
-string get_table(array(string) entries, void|int sep, void|int cols)
+mapping(string:array(string)|int) wrap_text(string text, int max_width)
+{
+    array(string) words = String.trim_all_whites(text)/" ";
+    array(string) ret;
+    foreach (words, string word)
+    {
+        if (!ret)
+            ret = ({ word });
+        else if (strlen(ret[-1] || "") + strlen(word) < max_width)
+        {
+            ret[-1] = ({ ret[-1], word })*" ";
+        }
+        else
+            ret += ({ word });
+    }
+
+    return ([ "#lines": sizeof(ret), "text": ret ]);
+}
+
+string
+get_table(array(string) entries, void|int sep, void|int cols, void|bool wrap)
 {
     if (!entries || !sizeof(entries))
         return "";
@@ -51,8 +71,6 @@ string get_table(array(string) entries, void|int sep, void|int cols)
     array(array(string)) column_strings = entries/(float)(sizeof(entries)/(float)cols);
     array(int) column_widths = allocate(sizeof(column_strings));
     int num_entries_in_column = sizeof(column_strings[0]);
-    int max_col_width =
-        (width - ((!undefinedp(sep)) ? 4 + 3 * (cols-1) : (cols-1)))/cols;
     foreach (column_strings; int i; array(string) col_entries)
     {
         if (sizeof(col_entries) == 1)
@@ -63,43 +81,72 @@ string get_table(array(string) entries, void|int sep, void|int cols)
         {
             column_widths[i] = Array.reduce(lambda(string|int arg1, string arg2)
                     {
-                    int s1 = stringp(arg1) ? strlen(arg1) : arg1;
-                    int s2 = strlen(arg2);
-                    return (s1 > s2) ? s1 : s2;
+                        int s1 = stringp(arg1) ? strlen(arg1) : arg1;
+                        int s2 = strlen(arg2);
+                        return (s1 > s2) ? s1 : s2;
                     }, col_entries);
-
-            if (column_widths[i] > max_col_width)
-                return (cols-1) ? get_table(entries, sep, cols-1) : "";
         }
 
         if (sizeof(col_entries) < num_entries_in_column)
             column_strings[i] += ({ "" });
     }
 
-    string ret = "";
-    if (Array.sum(column_widths) <= width)
+    int sep_lenght = ((!undefinedp(sep)) ? 4 + 3 * (cols-1) : (cols-1));
+    if ((sep_lenght + Array.sum(column_widths)) > width)
     {
-        array(string) col_patterns = allocate(sizeof(column_widths));
-        foreach (column_widths; int i; int w)
-        {
-            col_patterns[i] = "%-' '" + w + "s";
-        }
-        string pattern;
-        if (!undefinedp(sep))
-        {
-            pattern = sprintf("%c %s %c\n", sep,
-                    col_patterns * sprintf(" %c ", sep), sep);
-        }
+        if (!wrap)
+            return (cols-1) ? get_table(entries, sep, cols-1) : "";
         else
-            pattern = col_patterns*" " + "\n";
-
-        for (int i = 0; i < sizeof(column_strings[0]); i++)
-            ret += sprintf(pattern, @column(column_strings, i));
+        {
+            int longest_width = max(@column_widths);
+            int longest_column = search(column_widths, longest_width);
+            int max_width = width - sep_lenght -
+                (Array.sum(column_widths) - longest_width);
+            array(array(string)) wrapped_columns =
+                ({ ({ }) })*sizeof(column_widths);
+            for (int i = 0; i < sizeof(column_strings[0]); i++)
+            {
+                mapping(string:array(string)|int) wrapped =
+                    wrap_text(column_strings[longest_column][i], max_width);
+                for (int inner = 0; inner < sizeof(column_strings); inner++)
+                {
+                    if (inner != longest_column)
+                    {
+                        wrapped_columns[inner] += ({ column_strings[inner][i] });
+                        if (wrapped["#lines"] > 1)
+                        {
+                            wrapped_columns[inner] +=
+                                (({ ({ "" }) })*(wrapped["#lines"]-1))*({  });
+                        }
+                    }
+                    else
+                    {
+                        wrapped_columns[inner] += wrapped["text"];
+                    }
+                }
+            }
+            column_widths[longest_column] = max_width;
+            column_strings = wrapped_columns;
+        }
     }
-    else if(cols > 1)
-        ret = get_table(entries, sep, cols-1);
+
+    string ret = "";
+    array(string) col_patterns = allocate(sizeof(column_widths));
+    foreach (column_widths; int i; int w)
+    {
+        col_patterns[i] = "%-' '" + w + "s";
+    }
+    string pattern;
+    if (!undefinedp(sep))
+    {
+        pattern = sprintf("%c %s %c\n", sep,
+                col_patterns * sprintf(" %c ", sep), sep);
+    }
     else
-        ret = entries*"\n";
+        pattern = col_patterns*" " + "\n";
+
+    for (int i = 0; i < sizeof(column_strings[0]); i++)
+        ret += sprintf(pattern, @column(column_strings, i));
 
     return ret;
 }
@@ -319,6 +366,7 @@ class TextNode
     {
         self = node;
         name = self->get_any_name();
+        array(array(string)) table = ({ });
 
         if (self->get_node_type() == Parser.XML.Tree.XML_TEXT)
             text = self->value_of_node();
@@ -328,8 +376,21 @@ class TextNode
             {
                 if (name == "ref")
                     text += sprintf("*%s*", TextNode(c)->get_string());
+                else if (name == "int" && c->get_any_name() == "group")
+                {
+                    Group g = Group();
+                    g->parse(c);
+                    table += ({
+                        ({ g->get_value(true) || "", g->get_text(true) || "" })
+                        });
+                }
                 else
                     text += TextNode(c)->get_string();
+            }
+            if (name == "int" && sizeof(table))
+            {
+                text += sprintf("\n%s\n",
+                        get_table(column(table, 0) + column(table, 1), '|', 2, true));
             }
         }
     }
@@ -356,6 +417,7 @@ class Group
     inherit Base;
     protected string type;
     protected string text;
+    protected string value;
 
     string get_type() { return type; }
 
@@ -371,6 +433,8 @@ class Group
                 else
                     text = TextNode(e)->get_string();
             }
+            else if (ename == "value")
+                value = TextNode(e)->get_string();
             else
             {
                 type = ename;
@@ -378,6 +442,22 @@ class Group
                 name = attrs->name || UNDEFINED;
             }
         }
+    }
+
+    string get_text(void|bool clean)
+    {
+        if (clean)
+            return String.trim_all_whites(String.normalize_space(text || ""));
+        else
+            return String.trim_all_whites(text || "");
+    }
+
+    string get_value(void|bool clean)
+    {
+        if (clean)
+            return String.trim_all_whites(String.normalize_space(value || ""));
+        else
+            return String.trim_all_whites(value || "");
     }
 
     string get_string()
