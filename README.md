@@ -51,6 +51,7 @@ let g:pikedoc_master_key = 'g'
 | Combination | Command | Description |
 | --- | --- | --- |
 | `<Leader><MasterKey>p` | call PikeDocOpen | show help for word under the cursor if available |
+| `<Leader><MasterKey>s` | call PikeDocSearch | start Ex command PikeDocSearch, after which you can type query string to search for docs |
 | `<Leader><MasterKey>g` | call PikeDocGenerate | (re)generate documentation cache |
 
 

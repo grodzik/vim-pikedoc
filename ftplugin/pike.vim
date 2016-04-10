@@ -310,6 +310,27 @@ function! s:Open(...) abort
     call pikedoc.update_buffer()
 endfunction
 
+function! s:Search(...) abort
+    if !a:0
+        return
+    endif
+
+    let pikedoc = s:pikedoc()
+
+    let pikedoc.cWORD = a:1
+    let pikedoc.cword = split(substitute(a:1,
+                \'\([^`]\|^\)\(\->\|\.\|::\)', '\1 ', "g"))[-1]
+    let pikedoc.cword = substitute(pikedoc.cword, '[^a-zA-Z0-9_]', '', 'g')
+    
+    call pikedoc.make_keyword()
+    if !pikedoc.find_doc()
+        return
+    endif
+
+    call pikedoc.open()
+    call pikedoc.update_buffer()
+endfunction
+
 function! s:Follow() abort
     let pikedoc = s:pikedoc()
 
@@ -343,10 +364,12 @@ function! s:Generate() abort
 endfunction
 
 execute "command! -buffer -nargs=0 PikeDocOpen :call s:Open()"
+execute "command! -buffer -nargs=+ PikeDocSearch :call s:Search(<f-args>)"
 execute "command! -buffer -nargs=0 PikeDocGenerate :call s:Generate()"
 
 if exists('g:pikedoc_define_mappings') && g:pikedoc_define_mappings == 1
     let master_key = exists('g:pikedoc_master_key') ? g:pikedoc_master_key : "g"
     execute "nnoremap <Leader>".master_key."p :PikeDocOpen<cr>"
+    execute "nnoremap <Leader>".master_key."s :PikeDocSearch "
     execute "nnoremap <Leader>".master_key."g :PikeDocGenerate<cr>"
 endif
