@@ -35,6 +35,8 @@ For description of this variable as well as others go to [Options](https://githu
 | `m` | show list of methods for current module/class/namespace |
 | `M` | show list of modules for current module/class/namespace |
 | `c` | show list of classes for current module/class/namespace |
+| `s` | search for keyword |
+| `S` | search for keyword with already entered current module path |
 
 ### Key mappings for pike source files
 

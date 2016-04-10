@@ -225,6 +225,9 @@ function! s:pikedoc_update_buffer() dict abort
     execute "nnoremap <buffer> <silent> M :<C-U>call <SID>Open('".self.modules()."')<cr>"
     execute "nnoremap <buffer> <silent> c :<C-U>call <SID>Open('".self.classes()."')<cr>"
     execute "nnoremap <buffer> <silent> f :<C-U>call <SID>Follow()<cr>"
+    execute "command! -buffer -nargs=+ -bar Search :call <SID>Search(<f-args>)"
+    execute "nnoremap <buffer> s :Search "
+    execute "nnoremap <buffer> S :Search ".substitute(fnamemodify(self.path, ":h"), '/', '.', 'g')."."
 endfunction
 
 function! s:pikedoc_get_name() dict abort
