@@ -159,7 +159,7 @@ class Base
 
     string get_string() { return "Base"; }
 
-    void create(void|Parser.XML.Tree.SimpleNode node) { };
+    void create() { };
 
     protected void prepare(mapping(string:string) attrs)
     {
