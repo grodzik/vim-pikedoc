@@ -206,7 +206,7 @@ class Base
 class Types
 {
     inherit Base;
-    private array(string) types;
+    private array(string) types = ({ });
 
     private string parse_type(Parser.XML.Tree.SimpleNode type_node)
     {
