@@ -250,6 +250,26 @@ class Types
     }
 }
 
+class Modifiers
+{
+    inherit Base;
+    private array(string) modifiers = ({ });
+
+    protected void process_node(Parser.XML.Tree.SimpleNode node)
+    {
+        foreach (node->get_elements("modifiers"), Parser.XML.Tree.SimpleNode m)
+        {
+            foreach (m->get_children(), Parser.XML.Tree.SimpleNode c)
+                modifiers += ({ c->get_any_name() });
+        }
+    }
+
+    string get_string()
+    {
+        return sprintf("%s", modifiers*" ");
+    }
+}
+
 class Value
 {
     inherit Base;
@@ -302,6 +322,7 @@ class Method
 
     private array(Argument) args = ({ });
     private Types returns;
+    private Modifiers modifiers;
 
     protected void process_node(Parser.XML.Tree.SimpleNode node)
     {
@@ -318,11 +339,18 @@ class Method
 
         returns = Types();
         returns->parse(node->get_first_element("returntype"));
+
+        if (node->get_elements("modifiers"))
+        {
+            modifiers = Modifiers();
+            modifiers->parse(node);
+        }
     }
 
     string get_string()
     {
-        return sprintf("%s %s(%s)", returns, get_name(0), args->get_string()*", ");
+        return sprintf("%s%s %s(%s)", modifiers ? modifiers->get_string() + " " : "", returns,
+            get_name(0), args->get_string()*", ");
     }
 }
 
@@ -641,12 +669,18 @@ class DocGroupC
 class Container
 {
     inherit Base;
+    protected Container parent;
     protected mapping(string:DocMethod) methods = ([ ]);
     protected mapping(string:Class) classes = ([ ]);
     protected mapping(string:Module) modules = ([ ]);
     protected array(DocGroupV) variables = ({ });
     protected array(DocGroupC) constants = ({ });
     protected Doc doc;
+
+    void create(Container p)
+    {
+        parent = p;
+    }
 
     protected void process_node(Parser.XML.Tree.SimpleNode node)
     {
@@ -666,7 +700,7 @@ class Container
                 classes[cname]->parse(child);
             else
             {
-                classes[cname] = Class();
+                classes[cname] = Class(this);
                 classes[cname]->parse(child);
             }
         }
@@ -679,7 +713,7 @@ class Container
                 modules[mname]->parse(child);
             else
             {
-                modules[mname] = Module();
+                modules[mname] = Module(this);
                 modules[mname]->parse(child);
             }
         }
@@ -853,7 +887,7 @@ void|int parse_node(Parser.XML.Tree.SimpleNode node)
             if (attrs->name)
             {
                 Namespace namespace = namespaces[attrs->name]
-                    || Namespace();
+                    || Namespace(UNDEFINED);
                 namespace->parse(node);
 
                 namespaces[attrs->name] = namespace;
