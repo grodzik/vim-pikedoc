@@ -182,7 +182,7 @@ class Base
     string get_name(bool vimsyntax)
     {
         if (vimsyntax)
-            return sprintf("*%s*", name);
+            return sprintf("*%s*", name || "");
 
         return name;
     }
@@ -349,7 +349,8 @@ class Method
 
     string get_string()
     {
-        return sprintf("%s%s %s(%s)", modifiers ? modifiers->get_string() + " " : "", returns,
+        return sprintf("%s%s %s(%s)",
+            modifiers ? modifiers->get_string() + " " : "", returns,
             get_name(0), args->get_string()*", ");
     }
 }
@@ -372,6 +373,50 @@ class Variable
     }
 }
 
+class Inherit
+{
+    inherit Base;
+    protected string classname;
+    protected Modifiers modifiers;
+
+    void process_node(Parser.XML.Tree.SimpleNode node)
+    {
+        Parser.XML.Tree.SimpleNode n = node->get_first_element("classname");
+        if (n)
+        {
+            classname = n->value_of_node() || name;
+            classname = replace(classname, "->", ".");
+            classname = replace(classname, "::", ".");
+            Regexp.PCRE.Plain r = Regexp.PCRE.Plain("[^a-zA-Z0-9_.]");
+            classname = r.replace(classname, "");
+            r = Regexp.PCRE.Plain("^[.]+");
+            classname = r.replace(classname, "");
+            r = Regexp.PCRE.Plain("[.]+$");
+            classname = r.replace(classname, "");
+        }
+
+        if (node->get_elements("modifiers"))
+        {
+            modifiers = Modifiers();
+            modifiers->parse(node);
+        }
+    }
+
+    string get_classname(bool vimsyntax)
+    {
+        if (vimsyntax)
+            return sprintf("*%s*", classname);
+
+        return classname;
+    }
+
+    string get_string()
+    {
+        return sprintf("%s%s",
+            modifiers ? modifiers->get_string() + " " : "", get_classname(1));
+    }
+}
+
 class Constant
 {
     inherit Base;
@@ -380,7 +425,7 @@ class Constant
 
     string get_string()
     {
-        return sprintf("%s", name);
+        return sprintf("Constant %s", name);
     }
 }
 
@@ -430,7 +475,7 @@ class TextNode
             string ret = "";
             foreach (text/"\n", string line)
             {
-                ret += sprintf("\n    %s", String.trim_all_whites(line));
+                ret += sprintf("    %s\n", String.trim_all_whites(line));
             }
 
             return sprintf("%s", ret);
@@ -490,8 +535,8 @@ class Group
 
     string get_string()
     {
-        return sprintf("%s%s\n    %s", String.capitalize(type),
-            name ? " " + name : "", text || "");
+        return sprintf("%s%s%s", String.capitalize(type),
+            name ? " " + name : "", text ? "\n    " + get_text() : "");
     }
 }
 
@@ -532,10 +577,10 @@ class Doc
     {
         string ret = "";
         if (description)
-            ret = sprintf("Description%s\n", description);
+            ret = sprintf("Description\n%s", description);
 
         if (sizeof(groups))
-            ret += groups->get_string()*"\n";
+            ret += groups->get_string()*"\n\n";
 
         return ret;
     }
@@ -574,8 +619,9 @@ class DocMethod
 
     string get_string()
     {
-        return sprintf("Method %s()%s    %s\n\n%s", get_name(1), line(),
-            methods->get_string()*"\n    ", doc || "");
+        return sprintf("Method %s()%s%s%s", get_name(1), line(),
+            "    "+methods->get_string()*"\n    ",
+            doc ? "\n\n" + doc->get_string() : "");
     }
 }
 
@@ -634,7 +680,8 @@ class DocGroupV
 
     string get_string()
     {
-        return sprintf("Variable %s\n\n%s", variable, doc);
+        return sprintf("Variable %s%s", variable,
+            doc ? "\n\n" + doc->get_string() : "");
     }
 }
 
@@ -662,7 +709,42 @@ class DocGroupC
 
     string get_string()
     {
-        return sprintf("    Constant %s\n\n%s", constants->get_string()*"\n   Constant ", doc || "");
+        return sprintf("%s%s", constants->get_string()*"\n",
+            doc ? "\n\n" + doc->get_string() :  "");
+    }
+}
+
+class DocGroupI
+{
+    inherit DocGroup;
+    Doc doc;
+    private array(Inherit) inherits = ({ });
+
+    void process_node(Parser.XML.Tree.SimpleNode node)
+    {
+        if (node->get_first_element("doc"))
+        {
+            doc = Doc();
+            doc->parse(node->get_first_element("doc"));
+        }
+
+        foreach (node->get_elements("inherit"), Parser.XML.Tree.SimpleNode i)
+        {
+            Inherit inh = Inherit();
+            inh->parse(i);
+            inherits += ({ inh });
+        }
+    }
+
+    string get_string()
+    {
+        return sprintf("Inherit %s\n\n%s", inherits->get_string()*"\n   Inherit ",
+            doc || "");
+    }
+
+    array(string) get_classnames(bool vimsyntax)
+    {
+        return inherits->get_classname(vimsyntax);
     }
 }
 
@@ -675,7 +757,11 @@ class Container
     protected mapping(string:Module) modules = ([ ]);
     protected array(DocGroupV) variables = ({ });
     protected array(DocGroupC) constants = ({ });
+    protected array(DocGroupI) inherits = ({ });
+    protected array(Container) _inherits = ({ });
+    protected array(Container) _inherited = ({ });
     protected Doc doc;
+    protected string path;
 
     void create(Container p)
     {
@@ -753,6 +839,12 @@ class Container
                     constants += ({ dgc });
                     break;
 
+                case "inherit":
+                    DocGroupI dgi = DocGroupI();
+                    dgi->parse(node);
+                    inherits += ({ dgi });
+                    break;
+
                 case "import":
                 break;
 
@@ -766,10 +858,10 @@ class Container
 
     string get_type() { return "Container"; }
 
-    void save(string parent_path)
+    void save(string parent_dir)
     {
-        string path = ({ parent_path, name })*"/";
-        string this_path = ({ path, "__this__" })*"/";
+        string module_dir = ({ parent_dir, name })*"/";
+        string this_path = ({ module_dir, "__this__" })*"/";
         Stdio.mkdirhier(this_path);
 
         if (!Stdio.exist(combine_path(this_path, "type")))
@@ -781,9 +873,9 @@ class Container
                 string_to_utf8(d));
         }
 
-        values(methods)->save(path);
-        values(classes)->save(path);
-        values(modules)->save(path);
+        values(methods)->save(module_dir);
+        values(classes)->save(module_dir);
+        values(modules)->save(module_dir);
 
         if (sizeof(methods))
         {
@@ -808,14 +900,37 @@ class Container
     string get_string()
     {
         string ret = "";
+        if (sizeof(_inherits) || sizeof(_inherited))
+        {
+            ret += "Inheritance graph:\n";
+            string prefix = "";
+            string hline;
+            foreach (_inherits, Container c)
+            {
+                ret += sprintf("%s*%s*\n", prefix, c->get_path());
+                prefix += "  |  ";
+                if (hline)
+                    hline += "--+--";
+                else
+                    hline = "  +--";
+            }
+            ret += sprintf("%s%s\n", hline || "", get_path());
+            prefix = replace(prefix, "|", " ") + "  |--";
+            foreach (_inherited, Container c)
+            {
+                ret += sprintf("%s*%s*\n", prefix, c->get_path());
+            }
+            ret += line();
+        }
+
         if (doc)
-            ret = doc->get_string();
+            ret += doc->get_string();
 
         if (sizeof(constants))
         {
             foreach (constants, DocGroupC c)
             {
-                ret += sprintf("\nConstant %s\n%s\n",
+                ret += sprintf("%sConstant %s\n%s\n", line(),
                         c->get_name(1), c->get_string());
             }
         }
@@ -824,12 +939,68 @@ class Container
         {
             foreach (variables, DocGroupV v)
             {
-                ret += sprintf("\nVariable %s\n%s\n",
+                ret += sprintf("%sVariable %s\n%s\n", line(),
                         v->get_name(1), v->get_string());
             }
         }
 
+        if (sizeof(inherits))
+        {
+            foreach (inherits, DocGroupI i)
+            {
+                ret += sprintf("%sInherit %s\n%s\n", line(),
+                        i->get_name(0) || "", i->get_string() || "");
+            }
+        }
+
         return ret;
+    }
+
+    mapping(string:DocMethod) get_methods() { return methods; }
+
+    void resolve_inheritance()
+    {
+        array(Container) all_modules = values(namespaces)->get_children()*({});
+        array(string) paths = all_modules->get_path();
+        foreach (inherits->get_classnames(0)*({}), string inheritance)
+        {
+            int pos = Array.search_array(paths, lambda(string current) {
+                        if (has_value(inheritance, "."))
+                        {
+                            return has_value(current, inheritance);
+                        }
+                        else
+                        {
+                            return has_value(current/".", inheritance);
+                        }
+                    });
+
+            if (pos != -1)
+            {
+                _inherits += ({ all_modules[pos] });
+                methods = all_modules[pos]->get_methods() | methods;
+                _inherits[-1]->add_inheritance(this);
+            }
+        }
+    }
+
+    void add_inheritance(Container i)
+    {
+        _inherited += ({ i });
+    }
+
+    string get_path()
+    {
+        if (!path)
+            path = (parent ? parent->get_path()+"." : "") + (name||"");
+
+        return path;
+    }
+
+    array(Container) get_children()
+    {
+        return values(modules) + values(classes)
+            + values(modules)->get_children() + values(classes)->get_children();
     }
 }
 
@@ -841,8 +1012,8 @@ class Class
 
     string get_string()
     {
-        return sprintf("Class %s%s%s\n", get_name(1), line(),
-            doc || get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
+        return sprintf("Class %s%s%s%s%s\n", get_name(1), line(), ::get_string(),
+            line(), get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
     }
 }
 
@@ -854,8 +1025,8 @@ class Module
 
     string get_string()
     {
-        return sprintf("Module %s%s%s\n", get_name(1), line(),
-            doc || get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
+        return sprintf("Module %s%s%s%s%s\n", get_name(1), line(), ::get_string(),
+            line(), get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
     }
 }
 
@@ -863,12 +1034,22 @@ class Namespace
 {
     inherit Container;
 
+    private array(Container) children;
+
     string get_type() { return "namespace"; }
 
     string get_string()
     {
-        return sprintf("Namespace %s%s%s\n", get_name(1), line(),
-            doc || get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
+        return sprintf("Namespace %s%s%s%s%s\n", get_name(1), line(), ::get_string(),
+            line(), get_table(Array.sort(values(methods)->get_name(1))[*]+"()"));
+    }
+
+    array(Container) get_children()
+    {
+        if (!children)
+            children = Array.flatten(::get_children());
+
+        return children;
     }
 }
 
@@ -1284,6 +1465,16 @@ int main(int n, array(string) args)
     else {
         werror("No source directory or input files given.\n");
         return 1;
+    }
+
+
+    foreach (values(namespaces)->get_children(), array(Container) children)
+    {
+        foreach (children, Container child)
+        {
+            if (child)
+                child->resolve_inheritance();
+        }
     }
 
     values(namespaces)->save(targetdir);
