@@ -199,7 +199,7 @@ endfunction
 
 function! s:pikedoc_fill_with(content) dict abort
     cd /tmp
-    let name = self.get_name()
+    let name = self.get_module_path()
     call writefile(a:content, name)
     silent execute "pedit ".name
     call delete(name)
@@ -235,6 +235,14 @@ endfunction
 
 function! s:pikedoc_get_name() dict abort
     return fnamemodify(self.file, ":t:r")
+endfunction
+
+function! s:pikedoc_get_module_path() dict abort
+    let mpath = substitute(self.file, s:plugindir."[/]*pikedoc/", "", "g")
+    let mpath = substitute(mpath, "/", "::", "")
+    let mpath = substitute(mpath, ".txt$", "", "")
+    let mpath = substitute(mpath, "/", ".", "g")
+    return mpath
 endfunction
 
 function! s:pikedoc_get_this_path(what) dict abort
@@ -293,7 +301,8 @@ endfunction
 call s:add_to('pikedoc', ['indexfile', 'generate_index', 'read_index',
             \'find_doc', 'get_name', 'open', 'parent', 'fill_with',
             \'has_doc', 'methods', 'modules', 'classes', 'get_this_path',
-            \'clear_docs', 'make_keyword', 'update_buffer', 'dump'])
+            \'clear_docs', 'make_keyword', 'update_buffer', 'get_module_path',
+            \'dump'])
 
 function! s:Open(...) abort
     if a:0 && a:1 == -1
