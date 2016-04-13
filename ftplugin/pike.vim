@@ -180,11 +180,7 @@ function! s:pikedoc_find_doc() dict abort
         elseif len(l:filelist)
             let choose_menu = []
             for f in l:filelist
-                let f = substitute(f, glob(s:plugindir."/pikedoc/"), "", "g")
-                let f = substitute(f, "/__this__.*", "", "")
-                let f = substitute(f, "/", "::", "")
-                let f = substitute(f, "/", ".", "g")
-                let choose_menu += ['*'.substitute(f, '\.txt$', "", '').'*']
+                let choose_menu += ['*'.self.get_module_path(f).'*']
             endfor
             let self.menu = choose_menu
             let self.file = "/tmp/pikedoc_menu"
@@ -247,8 +243,13 @@ function! s:pikedoc_get_name() dict abort
     return fnamemodify(self.file, ":t:r")
 endfunction
 
-function! s:pikedoc_get_module_path() dict abort
-    let mpath = substitute(self.file, s:plugindir."[/]*pikedoc/", "", "g")
+function! s:pikedoc_get_module_path(...) dict abort
+    if a:0
+        let mpath = a:1
+    else
+        let mpath = self.file
+    endif
+    let mpath = substitute(mpath, s:plugindir."[/]*pikedoc/", "", "g")
     let mpath = substitute(mpath, "/__this__.*", "", "")
     let mpath = substitute(mpath, "/", "::", "")
     let mpath = substitute(mpath, ".txt$", "", "")
