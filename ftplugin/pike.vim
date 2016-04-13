@@ -133,10 +133,19 @@ function! s:pikedoc_make_keyword() dict abort
         let self.keywords = l:match
     endif
 
+    let namespace = matchstr(self.keywords, '^[^:]\+::')
+
+    if len(namespace) == 0
+        let namespace = "predef::"
+    endif
+
+    let self.namespace = substitute(namespace, ':', '', 'g')
+    let self.keywords = substitute(self.keywords, namespace, "", "")
+
     let l:path = split(substitute(self.keywords,
                 \'\([^`]\|^\)\(\->\|\.\|::\)', '\1 ', "g"))
 
-    let self.path = join(l:path, "/")
+    let self.path = self.namespace."/".join(l:path, "/")
     let self.keyword = l:path[-1] 
 endfunction
 
@@ -158,10 +167,10 @@ function! s:pikedoc_find_doc() dict abort
     if has_key(s:index, self.keyword)
         let file = get(s:index, self.keyword)
         let l:filelist = split(file, ",")
-        if len(l:filelist) == 1 && len(l:list) == 1
+        if len(l:filelist) == 1
             let self.file = l:filelist[0]
             return 1
-        elseif len(l:filelist) && len(l:list) > 1
+        elseif len(l:filelist) > 1 && len(l:list) > 1
             let subpath = join(l:list[0:-2], "/")."/".self.keyword
             let pos = match(l:filelist, subpath)
             if pos >= 0
@@ -172,9 +181,10 @@ function! s:pikedoc_find_doc() dict abort
             let choose_menu = []
             for f in l:filelist
                 let f = substitute(f, glob(s:plugindir."/pikedoc/"), "", "g")
+                let f = substitute(f, "/__this__.*", "", "")
                 let f = substitute(f, "/", "::", "")
                 let f = substitute(f, "/", ".", "g")
-                let choose_menu += ['*'.fnamemodify(f, ":r").'*']
+                let choose_menu += ['*'.substitute(f, '\.txt$', "", '').'*']
             endfor
             let self.menu = choose_menu
             let self.file = "/tmp/pikedoc_menu"
@@ -239,6 +249,7 @@ endfunction
 
 function! s:pikedoc_get_module_path() dict abort
     let mpath = substitute(self.file, s:plugindir."[/]*pikedoc/", "", "g")
+    let mpath = substitute(mpath, "/__this__.*", "", "")
     let mpath = substitute(mpath, "/", "::", "")
     let mpath = substitute(mpath, ".txt$", "", "")
     let mpath = substitute(mpath, "/", ".", "g")
@@ -293,6 +304,7 @@ function! s:pikedoc_dump() dict abort
     call s:print(self, "menu")
     call s:print(self, "cword")
     call s:print(self, "cWORD")
+    call s:print(self, "namespace")
     call s:print(self, "path")
     call s:print(self, "keyword")
     call s:print(self, "keywords")
