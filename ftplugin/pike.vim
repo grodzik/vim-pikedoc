@@ -177,7 +177,8 @@ function! s:pikedoc_find_doc() dict abort
                 let self.file = l:filelist[pos]
                 return 1
             endif
-        elseif len(l:filelist)
+        endif
+        if len(l:filelist)
             let choose_menu = []
             for f in l:filelist
                 let choose_menu += ['*'.self.get_module_path(f).'*']
