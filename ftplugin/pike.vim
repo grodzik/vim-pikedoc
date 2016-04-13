@@ -110,6 +110,9 @@ function! s:pikedoc_generate_index() dict abort
 
         silent! execute cmd
     endfor
+    if filereadable(self.indexfile()) == 0
+        throw "Unable to generate index"
+    endif
 endfunction
 
 function! s:pikedoc_read_index() dict abort
@@ -151,7 +154,14 @@ endfunction
 
 function! s:pikedoc_find_doc() dict abort
     if len(s:index) == 0
-        call self.read_index()
+        try
+            call self.read_index()
+            silent execute ":redraw!"
+        catch
+            silent execute ":redraw!"
+            echohl ErrorMsg | echom "PikeDoc: ".v:exception | echohl None
+            return 0
+        endtry
     endif
 
     let full_path = s:plugindir."/pikedoc/".self.path
@@ -388,8 +398,13 @@ endfunction
 function! s:Generate() abort
     let pikedoc = s:pikedoc()
     call pikedoc.clear_docs()
-    call pikedoc.generate_index()
-    silent execute ":redraw!"
+    try
+        call pikedoc.generate_index()
+        silent execute ":redraw!"
+    catch /.*/
+        silent execute ":redraw!"
+        echohl ErrorMsg | echom "PikeDoc: ".v:exception | echohl None
+    endtry
 endfunction
 
 execute "command! -buffer -nargs=0 PikeDocOpen :call s:Open()"
