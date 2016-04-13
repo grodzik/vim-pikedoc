@@ -215,12 +215,10 @@ function! s:pikedoc_has_doc() dict abort
 endfunction
 
 function! s:pikedoc_fill_with(content) dict abort
-    cd /tmp
-    let name = self.get_module_path()
+    let name = "/tmp".self.get_module_path()
     call writefile(a:content, name)
     silent execute "pedit ".name
     call delete(name)
-    cd -
 endfunction
 
 function! s:pikedoc_open() dict abort
@@ -235,6 +233,7 @@ endfunction
 
 function! s:pikedoc_update_buffer() dict abort
     wincmd P
+    lcd /tmp
     setlocal nobuflisted nowrap bufhidden=wipe ft=pikedoc cole=2 cocu=nc readonly nomodifiable
     nnoremap <buffer> <silent> q :bd<cr>
     execute "nnoremap <buffer> <silent> p :<C-U>call <SID>Open('".self.parent()."')<cr>"
