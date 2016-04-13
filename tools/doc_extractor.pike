@@ -151,6 +151,31 @@ get_table(array(string) entries, void|int sep, void|int cols, void|bool wrap)
     return ret;
 }
 
+string clear_name(string name)
+{
+    if (!name)
+        return name;
+
+    if ((<"`!", "`%", "`&", "`", "`*", "`+", "`+=", "`-", "`->", "`->=", "`/",
+        "`<", "`<<", "`==", "`>", "`>>", "`[..]", "`[]", "`[]=", "`^", "``%",
+        "``&", "``*", "``+", "``-", "``/", "``<<", "``>>", "``^", "``|", "`|",
+        "`~", "`()", "`!=", "`<=", "`>=">)[name])
+    {
+        return name;
+    }
+
+    name = replace(name, "->", ".");
+    name = replace(name, "::", ".");
+    Regexp.PCRE.Plain r = Regexp.PCRE.Plain("[^a-zA-Z0-9_.-]");
+    name = r.replace(name, "");
+    r = Regexp.PCRE.Plain("^[.]+");
+    name = r.replace(name, "");
+    r = Regexp.PCRE.Plain("[.]+$");
+    name = r.replace(name, "");
+
+    return name;
+}
+
 class Base
 {
     protected string name;
@@ -168,6 +193,7 @@ class Base
             attributes = attrs;
             name = attrs->name;
         }
+        name = clear_name(name);
     }
 
     void process_node(Parser.XML.Tree.SimpleNode node);
@@ -383,17 +409,7 @@ class Inherit
     {
         Parser.XML.Tree.SimpleNode n = node->get_first_element("classname");
         if (n)
-        {
-            classname = n->value_of_node() || name;
-            classname = replace(classname, "->", ".");
-            classname = replace(classname, "::", ".");
-            Regexp.PCRE.Plain r = Regexp.PCRE.Plain("[^a-zA-Z0-9_.]");
-            classname = r.replace(classname, "");
-            r = Regexp.PCRE.Plain("^[.]+");
-            classname = r.replace(classname, "");
-            r = Regexp.PCRE.Plain("[.]+$");
-            classname = r.replace(classname, "");
-        }
+            classname = clear_name(n->value_of_node() || name);
 
         if (node->get_elements("modifiers"))
         {
@@ -593,8 +609,15 @@ class DocGroup
 
     void save(string parent_path)
     {
-        string filename = combine_path(parent_path,
-                Protocols.HTTP.uri_encode(name)) + ".txt";
+        string encoded_name = Protocols.HTTP.uri_encode(name);
+        if (strlen(encoded_name) < 1)
+        {
+            werror("%s:%d: Unhandled or unnamed entity: %O\n", (__FILE__/"/")[-1],
+                __LINE__, get_string());
+            return;
+        }
+
+        string filename = combine_path(parent_path, encoded_name) + ".txt";
 
         string content = string_to_utf8(get_string());
         if (Stdio.exist(filename))
