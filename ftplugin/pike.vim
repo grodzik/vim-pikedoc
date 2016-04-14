@@ -215,7 +215,7 @@ function! s:pikedoc_has_doc() dict abort
 endfunction
 
 function! s:pikedoc_fill_with(content) dict abort
-    let name = "/tmp".self.get_module_path()
+    let name = "/tmp/".self.get_module_path()
     call writefile(a:content, name)
     silent execute "pedit ".name
     call delete(name)
