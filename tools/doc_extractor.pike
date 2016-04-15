@@ -445,6 +445,18 @@ class Constant
     }
 }
 
+class Directive
+{
+    inherit Base;
+
+    void process_node(Parser.XML.Tree.SimpleNode node) {}
+
+    string get_string()
+    {
+        return sprintf("%s", name);
+    }
+}
+
 class TextNode
 {
     protected string text = "";
@@ -771,6 +783,27 @@ class DocGroupI
     }
 }
 
+class DocGroupD
+{
+    inherit DocGroup;
+    private Doc doc;
+    private Directive directive;
+
+    void process_node(Parser.XML.Tree.SimpleNode node)
+    {
+        doc = Doc();
+        doc->parse(node->get_first_element("doc"));
+        directive = Directive();
+        directive->parse(node->get_first_element("directive"));
+        name = directive->get_name(0);
+    }
+
+    string get_string()
+    {
+        return sprintf("%s", doc ? "\n\n" + doc->get_string() : "");
+    }
+}
+
 class Container
 {
     inherit Base;
@@ -780,6 +813,7 @@ class Container
     protected mapping(string:Module) modules = ([ ]);
     protected array(DocGroupV) variables = ({ });
     protected array(DocGroupC) constants = ({ });
+    protected array(DocGroupD) directives = ({ });
     protected array(DocGroupI) inherits = ({ });
     protected array(Container) _inherits = ({ });
     protected array(Container) _inherited = ({ });
@@ -860,6 +894,12 @@ class Container
                     DocGroupC dgc = DocGroupC();
                     dgc->parse(node);
                     constants += ({ dgc });
+                    break;
+
+                case "directive":
+                    DocGroupD dgd = DocGroupD();
+                    dgd->parse(node);
+                    directives += ({ dgd });
                     break;
 
                 case "inherit":
@@ -955,6 +995,15 @@ class Container
             {
                 ret += sprintf("%sConstant %s\n%s\n", line(),
                         c->get_name(1), c->get_string());
+            }
+        }
+
+        if (sizeof(directives))
+        {
+            foreach (directives, DocGroupD d)
+            {
+                ret += sprintf("%sDirective %s\n%s\n", line(),
+                        d->get_name(1), d->get_string());
             }
         }
 
