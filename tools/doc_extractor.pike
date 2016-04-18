@@ -250,6 +250,26 @@ class Types
                 return "int" + ((sizeof(vals) == 2) ? "(" + vals*".." + ")" : "");
             break;
 
+            case "function":
+                array(Types) args = ({ });
+                Types returns;
+                foreach (type_node->get_elements("argtype"), Parser.XML.Tree.SimpleNode a)
+                {
+                    Types arg = Types();
+                    arg->parse(a);
+                    args += ({ arg });
+                }
+
+                if (Parser.XML.Tree.SimpleNode r = type_node->get_first_element("returntype"))
+                {
+                    returns = Types();
+                    returns->parse(r);
+                }
+
+                return sprintf("function(%s:%s)", args->get_string()*", ",
+                    returns || "");
+            break;
+
             default:
                 return type_name;
         }
