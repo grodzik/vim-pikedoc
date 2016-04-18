@@ -477,6 +477,41 @@ class Directive
     }
 }
 
+class Typedef
+{
+    inherit Base;
+    private Types types;
+    private Value value;
+    protected Modifiers modifiers;
+
+    void process_node(Parser.XML.Tree.SimpleNode node)
+    {
+        if (Parser.XML.Tree.SimpleNode v = node->get_first_element("value"))
+        {
+            value = Value();
+            value->parse(v);
+        }
+        else
+        {
+            types = Types();
+            types->parse(node->get_first_element("type"));
+        }
+
+        if (node->get_elements("modifiers"))
+        {
+            modifiers = Modifiers();
+            modifiers->parse(node);
+        }
+    }
+
+    string get_string()
+    {
+        return sprintf("%stypedef %s %s",
+            modifiers ? modifiers->get_string() + " " : "",
+            value || types, name);
+    }
+}
+
 class TextNode
 {
     protected string text = "";
@@ -824,6 +859,29 @@ class DocGroupD
     }
 }
 
+class DocGroupT
+{
+    inherit DocGroup;
+    private Doc doc;
+    private Typedef type_def;
+
+    void process_node(Parser.XML.Tree.SimpleNode node)
+    {
+        doc = Doc();
+        doc->parse(node->get_first_element("doc"));
+        type_def = Typedef();
+        type_def->parse(node->get_first_element("typedef"));
+        name = type_def->get_name(0);
+    }
+
+    string get_string()
+    {
+        return sprintf("%s\n\n%s", type_def,
+            doc ? "\n" + doc->get_string() : "");
+    }
+}
+
+
 class Container
 {
     inherit Base;
@@ -834,6 +892,7 @@ class Container
     protected array(DocGroupV) variables = ({ });
     protected array(DocGroupC) constants = ({ });
     protected array(DocGroupD) directives = ({ });
+    protected array(DocGroupT) typedefs = ({ });
     protected array(DocGroupI) inherits = ({ });
     protected array(Container) _inherits = ({ });
     protected array(Container) _inherited = ({ });
@@ -920,6 +979,12 @@ class Container
                     DocGroupD dgd = DocGroupD();
                     dgd->parse(node);
                     directives += ({ dgd });
+                    break;
+
+                case "typedef":
+                    DocGroupT dgt = DocGroupT();
+                    dgt->parse(node);
+                    typedefs += ({ dgt });
                     break;
 
                 case "inherit":
@@ -1024,6 +1089,15 @@ class Container
             {
                 ret += sprintf("%sDirective %s\n%s\n", line(),
                         d->get_name(1), d->get_string());
+            }
+        }
+
+        if (sizeof(typedefs))
+        {
+            foreach (typedefs, DocGroupT t)
+            {
+                ret += sprintf("%sTypedef %s\n    %s\n", line(),
+                        t->get_name(1), t->get_string());
             }
         }
 
