@@ -23,6 +23,9 @@
 "
 if exists("g:loaded_pikedoc") || v:version < 700
             \ || !exists("g:pikedoc_pike_sources")
+    if exists("g:loaded_pikedoc")
+        call s:AddCommands()
+    endif
     finish
 endif
 
@@ -406,13 +409,17 @@ function! s:Generate() abort
     endtry
 endfunction
 
-execute "command! -buffer -nargs=0 PikeDocOpen :call s:Open()"
-execute "command! -buffer -nargs=+ PikeDocSearch :call s:Search(<f-args>)"
-execute "command! -buffer -nargs=0 PikeDocGenerate :call s:Generate()"
+function! s:AddCommands()
+    execute "command! -buffer -nargs=0 PikeDocOpen :call s:Open()"
+    execute "command! -buffer -nargs=+ PikeDocSearch :call s:Search(<f-args>)"
+    execute "command! -buffer -nargs=0 PikeDocGenerate :call s:Generate()"
 
-if exists('g:pikedoc_define_mappings') && g:pikedoc_define_mappings == 1
-    let master_key = exists('g:pikedoc_master_key') ? g:pikedoc_master_key : "g"
-    execute "nnoremap <Leader>".master_key."p :PikeDocOpen<cr>"
-    execute "nnoremap <Leader>".master_key."s :PikeDocSearch "
-    execute "nnoremap <Leader>".master_key."g :PikeDocGenerate<cr>"
-endif
+    if exists('g:pikedoc_define_mappings') && g:pikedoc_define_mappings == 1
+        let master_key = exists('g:pikedoc_master_key') ? g:pikedoc_master_key : "g"
+        execute "nnoremap <Leader>".master_key."p :PikeDocOpen<cr>"
+        execute "nnoremap <Leader>".master_key."s :PikeDocSearch "
+        execute "nnoremap <Leader>".master_key."g :PikeDocGenerate<cr>"
+    endif
+endfunction
+
+call s:AddCommands()
