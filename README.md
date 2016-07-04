@@ -15,7 +15,7 @@ Use your preffered Vim plugin manager, like
 [Vundle](https://github.com/VundleVim/Vundle.vim),
 [Dein](https://github.com/Shougo/dein.vim) or any other that works for you.
 
-Or just drop `ftplugin/pike.vim` and `tools/doc_extractor.pike` to your `$HOME/.vim/` direcotry.
+Or just drop `ftplugin/pike.vim` and `tools/doc_extractor.pike` to your `$HOME/.vim/plugin` direcotry.
 
 Last and most important step is to add a list of pike sources to vimrc, at least one path is required:
 
@@ -24,9 +24,14 @@ let g:pikedoc_pike_sources = ['/path/to/your/sources']
 ```
 For description of this variable as well as others go to [Options](https://github.com/grodzik/vim-pikedoc/blob/master/README.md#options).
 
+To see if the plugin has been installed, run vi and execute the command
+```
+:scriptnames
+```
+to see the list of vim scripts which are included.
 ## Mappings
 
-### Previe-window key mappings
+### Preview-window key mappings
 | Combination | Description |
 | --- | --- |
 | `f` | goto definition of a word under the cursor (only highlighed ones) |
