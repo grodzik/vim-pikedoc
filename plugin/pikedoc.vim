@@ -21,17 +21,17 @@
 " OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 " THE SOFTWARE.
 "
-if v:version < 700 || !exists("g:pikedoc_pike_sources")
+if v:version < 700 || exists("g:loaded_pikedoc")
     finish
 endif
 
-execute "command! -buffer -nargs=0 PikeDocOpen :call pikedoc#open()"
-execute "command! -buffer -nargs=+ PikeDocSearch :call pikedoc#search(<f-args>)"
-execute "command! -buffer -nargs=0 PikeDocGenerate :call pikedoc#generate()"
+let g:loaded_pikedoc = 1
 
-if exists('g:pikedoc_define_mappings') && g:pikedoc_define_mappings == 1
-    let master_key = exists('g:pikedoc_master_key') ? g:pikedoc_master_key : "g"
-    execute "nnoremap <buffer> <Leader>".master_key."p :PikeDocOpen<cr>"
-    execute "nnoremap <buffer> <Leader>".master_key."s :PikeDocSearch "
-    execute "nnoremap <buffer> <Leader>".master_key."g :PikeDocGenerate<cr>"
+if !exists("g:pikedoc_pike_cmd")
+    let g:pikedoc_pike_cmd = 'pike'
 endif
+
+if !exists("g:pikedoc_confirm_remove")
+    let g:pikedoc_confirm_remove = 1
+endif
+
