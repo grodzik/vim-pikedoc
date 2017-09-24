@@ -113,3 +113,7 @@ This is early stage of development, most planned things don't work yet, so stay 
 | What | Fix/workaround |
 | --- | --- |
 | Missing `lena.gif` file while generating documentation for pure Pike's sources |  add/copy any image to `refdoc/src_images` with name `lena.gif`.  Vim is text based, so it won't display images anyway, so it doesn't matter what's there |
+## License
+
+Copyright © Paweł Tomak.  Distributed under the same terms as Vim itself.
+See `:help license`.
